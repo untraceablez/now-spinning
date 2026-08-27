@@ -9,7 +9,7 @@ description = "Listen to a record player, identify what's on the turntable, and 
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]
-requires-python = ">=3.10,<3.13"
+requires-python = ">=3.10,<3.14"
 authors = [{ name = "Taylor Cohron", email = "taylorcohrontech@gmail.com" }]
 keywords = ["vinyl", "turntable", "raspberry-pi", "now-playing", "shazam", "audio-fingerprinting"]
 classifiers = [
@@ -21,10 +21,14 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Multimedia :: Sound/Audio :: Analysis",
 ]
 dependencies = [
     "aiohttp>=3.9",
+    # shazamio -> pydub still imports the stdlib `audioop`, which 3.13 removed.
+    # This is the CPython team's extraction of that same module.
+    "audioop-lts>=0.2.1; python_version >= '3.13'",
     "numpy>=1.26",
     "pydantic>=2.9",
     "PyYAML>=6.0",

@@ -43,8 +43,10 @@ The parts that make it usable next to a real turntable are all in the policy:
 - **A 64-bit OS.** `shazamio-core` ships `manylinux_2_28_aarch64` wheels, so
   64-bit Raspberry Pi OS (Bookworm or later) installs with no Rust toolchain.
   32-bit `armv7l` has no wheel and is not supported.
-- **Python 3.10–3.12.** Not 3.13: a transitive dependency still uses the stdlib
-  `audioop` module, which 3.13 removed.
+- **Python 3.10–3.13.** On 3.13 an extra dependency (`audioop-lts`) is installed
+  automatically, because a transitive dependency still imports the stdlib
+  `audioop` module that 3.13 removed. Not 3.14: `shazamio-core` has no wheel for
+  it yet.
 - A Raspberry Pi 3 or newer (a Pi Zero 2 W works), a USB microphone, and a display.
 - `libportaudio2` for microphone capture.
 
@@ -147,6 +149,11 @@ sudo usermod -aG audio,video "$USER"
 
 **No input device found.** `now-spinning devices` shows nothing → install
 `libportaudio2`, confirm `arecord -l` sees the mic, and check group membership.
+
+**`Package 'now-spinning' requires a different Python`.** Your `python3` is newer
+than the supported range — most likely 3.14, since 3.13 is supported. Check with
+`python3 --version`, then build the venv with an interpreter in range:
+`sudo apt install python3.13-venv && python3.13 -m venv .venv`.
 
 **`Invalid sample rate [PaErrorCode -9997]`.** The device runs at one fixed rate
 (48 kHz on most USB interfaces) and PortAudio opens it through ALSA's raw device,

@@ -233,6 +233,9 @@ def cmd_calibrate(args: argparse.Namespace) -> int:
     except AudioError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
+    # Logging is turned down here so the meter stays readable, but the negotiated
+    # format is worth seeing: it is often not the one in the config file.
+    print(f"Capturing at {capture.sample_rate} Hz, {capture.channels} ch.\n")
 
     try:
         while True:

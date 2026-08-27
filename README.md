@@ -107,6 +107,7 @@ The keys worth knowing:
 | Key | Default | What it does |
 | --- | --- | --- |
 | `audio.device` | system default | Device index, or a substring of its name so it survives renumbering |
+| `audio.sample_rate` | `16000` | *Preferred* rate; capture falls back to one the device accepts |
 | `audio.clip_seconds` | `8.0` | How much audio each lookup gets |
 | `detect.start_threshold_dbfs` | `-45.0` | Level at which the gate opens |
 | `detect.silence_threshold_dbfs` | `-50.0` | Level below which quiet starts counting |
@@ -139,6 +140,14 @@ sudo usermod -aG audio,video "$USER"
 
 **No input device found.** `now-spinning devices` shows nothing → install
 `libportaudio2`, confirm `arecord -l` sees the mic, and check group membership.
+
+**`Invalid sample rate [PaErrorCode -9997]`.** The device runs at one fixed rate
+(48 kHz on most USB interfaces) and PortAudio opens it through ALSA's raw device,
+which does not resample. Capture negotiates this automatically — it tries the
+configured rate, then the device's own, then a list of common ones — so if you
+still see this, every format was refused. Check whether another program has the
+device open, and try the other index the same interface exposes: ALSA usually
+lists a card several times and only one entry is usable.
 
 **Never matches anything.** Run `now-spinning identify` — it prints the captured
 level. Below about −40 dBFS is too quiet; raise the gain in `alsamixer` or move

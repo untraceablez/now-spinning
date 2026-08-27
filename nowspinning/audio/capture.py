@@ -18,6 +18,11 @@ from nowspinning.config import AudioConfig
 
 log = logging.getLogger(__name__)
 
+#: Rates to try when neither the configured rate nor the device's own default is
+#: accepted. USB interfaces are opened through ALSA's raw device, which will not
+#: resample for us, so the rate has to be one the hardware genuinely runs at.
+FALLBACK_SAMPLE_RATES: tuple[int, ...] = (48000, 44100, 32000, 16000, 8000)
+
 
 class AudioError(RuntimeError):
     """The microphone could not be opened or read."""
@@ -113,6 +118,7 @@ class AudioCapture:
     def __init__(self, config: AudioConfig) -> None:
         self.config = config
         self.sample_rate = config.sample_rate
+        self.channels = config.channels
         self._capacity = max(1, int(config.buffer_seconds * config.sample_rate))
         self._buffer = np.zeros(self._capacity, dtype=np.float32)
         self._write = 0
@@ -128,12 +134,15 @@ class AudioCapture:
             return
         sd = _sounddevice()
         device = resolve_device(self.config.device)
+        rate, channels = self.negotiate_format(sd, device)
+        self._set_format(rate, channels)
+
         try:
             self._stream = sd.InputStream(
                 samplerate=self.sample_rate,
                 blocksize=self.config.block_size,
                 device=device,
-                channels=self.config.channels,
+                channels=self.channels,
                 dtype="float32",
                 callback=self._callback,
             )
@@ -142,11 +151,78 @@ class AudioCapture:
             self._stream = None
             raise AudioError(f"could not open audio input device {device!r}: {exc}") from exc
         log.info(
-            "capturing from device %s at %d Hz (%.0fs buffer)",
+            "capturing from device %s at %d Hz, %d ch (%.0fs buffer)",
             device if device is not None else "default",
             self.sample_rate,
+            self.channels,
             self.config.buffer_seconds,
         )
+
+    def negotiate_format(self, sd: Any, device: int | None) -> tuple[int, int]:
+        """Find a sample rate and channel count the device will actually accept.
+
+        USB audio interfaces frequently run at exactly one rate -- 48 kHz is the
+        common one -- and PortAudio opens them through ALSA's raw device, which
+        does no resampling. Asking for 16 kHz then fails outright with
+        "Invalid sample rate". Preferring the configured rate but falling back to
+        whatever the hardware offers is the difference between working out of the
+        box and handing the user a PaErrorCode to look up.
+        """
+        info: dict[str, Any] = {}
+        try:
+            info = dict(sd.query_devices(device, "input"))
+        except Exception:  # pragma: no cover - depends on the host
+            log.debug("could not query device %r; probing blind", device)
+
+        device_rate = int(info.get("default_samplerate") or 0)
+        max_channels = int(info.get("max_input_channels") or 0)
+
+        rates = [self.config.sample_rate, device_rate, *FALLBACK_SAMPLE_RATES]
+        channels = [self.config.channels]
+        if max_channels >= 1:
+            channels.append(min(max_channels, 2))
+        channels.append(2)
+
+        rejected: list[str] = []
+        for channel_count in dict.fromkeys(c for c in channels if c >= 1):
+            for rate in dict.fromkeys(r for r in rates if r >= 1):
+                try:
+                    sd.check_input_settings(
+                        device=device,
+                        samplerate=rate,
+                        channels=channel_count,
+                        dtype="float32",
+                    )
+                except Exception:
+                    rejected.append(f"{rate} Hz/{channel_count}ch")
+                    continue
+                if rate != self.config.sample_rate or channel_count != self.config.channels:
+                    log.info(
+                        "device does not support %d Hz/%dch; using %d Hz/%dch instead",
+                        self.config.sample_rate,
+                        self.config.channels,
+                        rate,
+                        channel_count,
+                    )
+                return rate, channel_count
+
+        raise AudioError(
+            f"device {device!r} rejected every format tried ({', '.join(rejected)}). "
+            "Run 'now-spinning devices' to see the rate it reports, and set "
+            "audio.sample_rate to match."
+        )
+
+    def _set_format(self, sample_rate: int, channels: int) -> None:
+        """Adopt a negotiated format, resizing the ring buffer if the rate changed."""
+        self.channels = channels
+        if sample_rate == self.sample_rate:
+            return
+        self.sample_rate = sample_rate
+        self._capacity = max(1, int(self.config.buffer_seconds * sample_rate))
+        with self._lock:
+            self._buffer = np.zeros(self._capacity, dtype=np.float32)
+            self._write = 0
+            self._filled = 0
 
     def stop(self) -> None:
         stream, self._stream = self._stream, None
@@ -168,7 +244,12 @@ class AudioCapture:
     def _callback(self, indata: np.ndarray, frames: int, time_info: Any, status: Any) -> None:
         if status:
             self._overflows += 1
-        mono = indata[:, 0] if indata.ndim > 1 else indata
+        # Downmix rather than taking channel 0: a mono mic on a two-channel
+        # interface is often wired to only one of them, and picking the wrong one
+        # would look exactly like a dead microphone.
+        mono = (
+            indata.mean(axis=1) if indata.ndim > 1 and indata.shape[1] > 1 else indata.reshape(-1)
+        )
         self.write(np.asarray(mono, dtype=np.float32))
 
     def write(self, samples: np.ndarray) -> None:

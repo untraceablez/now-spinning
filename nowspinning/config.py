@@ -39,8 +39,18 @@ class AudioConfig(_Base):
         default=None,
         description="PortAudio device index or substring of its name. None = system default input.",
     )
-    sample_rate: int = Field(default=16000, ge=8000, le=48000)
-    channels: int = Field(default=1, ge=1, le=2)
+    sample_rate: int = Field(
+        default=16000,
+        ge=8000,
+        le=192000,
+        description=(
+            "Preferred capture rate. USB interfaces often run at exactly one rate, "
+            "so capture falls back to whatever the device actually accepts."
+        ),
+    )
+    channels: int = Field(
+        default=1, ge=1, le=2, description="Preferred channel count; also negotiated."
+    )
     block_size: int = Field(default=1024, ge=64, le=8192)
     buffer_seconds: float = Field(
         default=15.0, ge=1.0, le=120.0, description="Size of the rolling capture buffer."

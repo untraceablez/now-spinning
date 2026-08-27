@@ -1,0 +1,42 @@
+# now-spinning as a system service.
+#
+#   sudo cp systemd/now-spinning.service /etc/systemd/system/
+#   sudo systemctl edit now-spinning        # set User= if you are not 'pi'
+#   sudo systemctl enable --now now-spinning
+#
+# The service user must be in the 'audio' and 'video' groups:
+#   sudo usermod -aG audio,video pi
+
+[Unit]
+Description=now-spinning record player display
+Documentation=https://github.com/untraceablez/now-spinning
+After=sound.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+SupplementaryGroups=audio video render
+
+WorkingDirectory=/opt/now-spinning
+ExecStart=/opt/now-spinning/.venv/bin/now-spinning run
+
+# Draw straight to the framebuffer through KMS/DRM, so no desktop session is
+# needed. Older images without a DRM device may need SDL_VIDEODRIVER=fbcon.
+Environment=SDL_VIDEODRIVER=kmsdrm
+Environment=PYTHONUNBUFFERED=1
+
+# The needle can drop at any time; always come back.
+Restart=always
+RestartSec=5
+
+# It only ever needs to read audio, write its cache, and talk to the recognizer.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=/opt/now-spinning /var/cache/now-spinning
+
+[Install]
+WantedBy=multi-user.target

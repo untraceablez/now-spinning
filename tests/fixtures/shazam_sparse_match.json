@@ -1,0 +1,20 @@
+{
+  "matches": [{ "id": "1", "offset": 1.0 }],
+  "track": {
+    "layout": "5",
+    "type": "MUSIC",
+    "key": "99999999",
+    "title": "Untitled Acetate",
+    "subtitle": "",
+    "images": {
+      "coverart": "https://images.example.invalid/400x400cc.jpg"
+    },
+    "sections": [
+      {
+        "type": "SONG",
+        "tabname": "Song",
+        "metadata": [{ "title": "Label", "text": "Private Press" }]
+      }
+    ]
+  }
+}

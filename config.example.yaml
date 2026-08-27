@@ -1,0 +1,92 @@
+# now-spinning configuration
+#
+# Copy to ~/.config/now-spinning/config.yaml and change what you need. Every value
+# below is the default, so a real config file usually only holds a handful of keys
+# -- most often just `audio.device` and the two detect thresholds.
+#
+# Searched in order: --config PATH, $XDG_CONFIG_HOME/now-spinning/config.yaml,
+# ~/.now-spinning.yaml, /etc/now-spinning/config.yaml
+
+audio:
+  # PortAudio device index, or a substring of the device name. A name is safer:
+  # indexes get renumbered when USB devices come and go. `now-spinning devices`
+  # lists what is available. null uses the system default input.
+  device: null
+  sample_rate: 16000
+  channels: 1
+  block_size: 1024
+  # How much audio to keep in memory. The clip sent to the recognizer is taken
+  # from the end of this, so it must be at least clip_seconds long.
+  buffer_seconds: 15.0
+  # Fingerprinting gets more reliable with a longer clip, at the cost of taking
+  # longer to notice a new track. 8 seconds is a good middle.
+  clip_seconds: 8.0
+
+detect:
+  # Run `now-spinning calibrate` with a record playing and set these from what you
+  # actually see. The right numbers depend entirely on mic gain and placement.
+  frame_seconds: 0.5
+  # Level at which the gate opens.
+  start_threshold_dbfs: -45.0
+  # Level below which quiet starts counting. Must be at or below the start
+  # threshold -- the gap between the two is what stops the gate flapping.
+  silence_threshold_dbfs: -50.0
+  # Spectral flatness above this reads as broadband noise rather than music, which
+  # is what keeps a furnace or a fan from triggering a lookup. Raise toward 0.5 if
+  # the gate never opens on real records.
+  max_flatness: 0.35
+  # Sustained music required before the gate opens.
+  start_seconds: 2.0
+  # Sustained quiet required before the gate closes. Long on purpose: quiet
+  # passages and inter-track gaps are not the end of the record.
+  silence_seconds: 20.0
+
+recognizer:
+  # "shazam" is the real provider; "fake" cycles placeholder tracks.
+  provider: shazam
+  timeout_seconds: 30.0
+  # After a fresh match, make no further lookups for this long. Most tracks outlast
+  # it, and this is the main thing keeping request volume reasonable.
+  quiet_period_seconds: 60.0
+  # Once the quiet period is over, re-identify at this cadence to catch a new track.
+  recheck_interval_seconds: 45.0
+  # Exponential backoff after a miss: 10s, 20s, 40s, ... capped.
+  backoff_initial_seconds: 10.0
+  backoff_max_seconds: 120.0
+  # How long the last track stays on screen after the music stops. Long enough to
+  # cover flipping the record over.
+  linger_seconds: 90.0
+  # Give up on a track that has not been reconfirmed in this long, even if music
+  # is still playing. 0 disables.
+  stale_after_seconds: 300.0
+
+display:
+  # pygame = framebuffer/KMS, works with no desktop environment
+  # web     = serve a page for a kiosk browser or a phone
+  # both    = run both renderers off the same state
+  # none    = headless (useful with the web backend disabled, or for logging only)
+  backend: pygame
+  fullscreen: true
+  # 0 x 0 uses the display's native resolution.
+  width: 0
+  height: 0
+  fps: 30
+  # Rotation speed of the on-screen record. 45.0 if you mostly play singles.
+  rpm: 33.333
+  show_cursor: false
+  background: "#101014"
+  foreground: "#f5f2ea"
+  accent: "#c8a24a"
+  # Path to a .ttf. null uses the font bundled with pygame.
+  font_path: null
+
+web:
+  host: 0.0.0.0
+  port: 8000
+
+logging:
+  level: INFO
+
+# Cover art and captured clips are cached here. Defaults to
+# $XDG_CACHE_HOME/now-spinning (usually ~/.cache/now-spinning).
+# cache_dir: /var/cache/now-spinning

@@ -1,0 +1,62 @@
+{
+  "matches": [
+    {
+      "id": "428905570",
+      "offset": 3.216097959,
+      "timeskew": 0.00021982193,
+      "frequencyskew": 0.0
+    }
+  ],
+  "timestamp": 1767225600000,
+  "timezone": "America/Chicago",
+  "track": {
+    "layout": "5",
+    "type": "MUSIC",
+    "key": "40333609",
+    "title": "Blue In Green",
+    "subtitle": "Miles Davis",
+    "images": {
+      "background": "https://images.example.invalid/background.jpg",
+      "coverart": "https://images.example.invalid/400x400cc.jpg",
+      "coverarthq": "https://images.example.invalid/800x800cc.jpg",
+      "joecolor": "b:000000p:ffffffs:d9c9a4t:ccccccq:aea180"
+    },
+    "share": {
+      "subject": "Blue In Green - Miles Davis",
+      "text": "Blue In Green by Miles Davis",
+      "href": "https://www.shazam.com/track/40333609/blue-in-green"
+    },
+    "sections": [
+      {
+        "type": "SONG",
+        "metapages": [
+          {
+            "image": "https://images.example.invalid/800x800cc.jpg",
+            "caption": "Blue In Green"
+          }
+        ],
+        "tabname": "Song",
+        "metadata": [
+          { "title": "Album", "text": "Kind of Blue" },
+          { "title": "Label", "text": "Columbia" },
+          { "title": "Released", "text": "1959" }
+        ]
+      },
+      {
+        "type": "VIDEO",
+        "tabname": "Video",
+        "youtubeurl": "https://www.example.invalid/youtube"
+      },
+      {
+        "type": "RELATED",
+        "tabname": "Related",
+        "url": "https://www.example.invalid/related"
+      }
+    ],
+    "genres": { "primary": "Jazz" },
+    "urlparams": {
+      "{tracktitle}": "Blue In Green",
+      "{trackartist}": "Miles Davis"
+    }
+  }
+}

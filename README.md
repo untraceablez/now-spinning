@@ -1,0 +1,196 @@
+# now-spinning
+
+A "now playing" screen for a record player.
+
+Vinyl has no metadata stream — the only thing a turntable emits is sound. So
+`now-spinning` listens. It runs on a Raspberry Pi mounted near the deck, hears the
+music through a microphone, identifies it, and puts a spinning record on the
+attached display with the track, artist, and album.
+
+![The pygame display showing a spinning record with the track, artist, and album](docs/screenshot.png)
+
+The record turns while music is playing, and the label shows the cover art once it
+has been fetched.
+
+## How it works
+
+```
+mic ─▶ capture ─▶ music gate ─▶ 8s clip ─▶ Shazam ─▶ cover art
+                                                        │
+                                                   NowPlaying
+                                                   ┌────┴────┐
+                                              pygame       web
+```
+
+The engine only sends audio anywhere once it is confident music is actually
+playing, and a match then buys a quiet period with no further lookups. That keeps
+request volume low and stops one side of a record from generating dozens of calls.
+
+The parts that make it usable next to a real turntable are all in the policy:
+
+- **A missed match never blanks the screen.** Fingerprinting fails on worn
+  pressings, long fades, and drum solos. The last known track stays up.
+- **Quiet passages are not the end of the record.** Closing the gate takes 20
+  seconds of sustained silence, with a lower threshold than opening it.
+- **Side flips are expected.** After the music stops the display lingers for 90
+  seconds before going idle.
+- **Room noise is not music.** A level threshold alone would fire every time the
+  furnace kicks on, so the gate also measures spectral flatness — noise is flat,
+  music is peaky.
+
+## Requirements
+
+- **A 64-bit OS.** `shazamio-core` ships `manylinux_2_28_aarch64` wheels, so
+  64-bit Raspberry Pi OS (Bookworm or later) installs with no Rust toolchain.
+  32-bit `armv7l` has no wheel and is not supported.
+- **Python 3.10–3.12.** Not 3.13: a transitive dependency still uses the stdlib
+  `audioop` module, which 3.13 removed.
+- A Raspberry Pi 3 or newer (a Pi Zero 2 W works), a USB microphone, and a display.
+- `libportaudio2` for microphone capture.
+
+## Install
+
+```bash
+sudo apt install -y python3-venv libportaudio2
+git clone https://github.com/untraceablez/now-spinning.git
+cd now-spinning
+python3 -m venv .venv
+.venv/bin/pip install -e '.[all]'
+```
+
+Extras: `[pygame]` for the framebuffer display, `[web]` for the browser display,
+`[all]` for both.
+
+## Quickstart
+
+Find the microphone:
+
+```bash
+now-spinning devices
+```
+
+Check the levels it actually sees, with a record playing:
+
+```bash
+now-spinning calibrate --device "USB Audio"
+```
+
+You want music to sit comfortably above `start_threshold_dbfs` and the room to
+sit below `silence_threshold_dbfs`. Adjust in the config until `MUSIC` appears
+when a record is on and `quiet` when it is not.
+
+Confirm recognition works end to end before involving the display:
+
+```bash
+now-spinning identify --device "USB Audio"
+```
+
+Then run it:
+
+```bash
+now-spinning run --device "USB Audio"            # fullscreen record display
+now-spinning run --backend web --port 8000       # browser display
+now-spinning run --backend both                  # both at once
+now-spinning run --demo --windowed               # no microphone, placeholder tracks
+```
+
+## Configuration
+
+Copy `config.example.yaml` to `~/.config/now-spinning/config.yaml` and change what
+you need — every key has a working default, so the file only needs the overrides.
+
+Searched in order: `--config PATH`, `$XDG_CONFIG_HOME/now-spinning/config.yaml`,
+`~/.now-spinning.yaml`, `/etc/now-spinning/config.yaml`.
+
+The keys worth knowing:
+
+| Key | Default | What it does |
+| --- | --- | --- |
+| `audio.device` | system default | Device index, or a substring of its name so it survives renumbering |
+| `audio.clip_seconds` | `8.0` | How much audio each lookup gets |
+| `detect.start_threshold_dbfs` | `-45.0` | Level at which the gate opens |
+| `detect.silence_threshold_dbfs` | `-50.0` | Level below which quiet starts counting |
+| `detect.max_flatness` | `0.35` | Above this the input reads as noise, not music |
+| `detect.silence_seconds` | `20.0` | Sustained quiet before the gate closes |
+| `recognizer.quiet_period_seconds` | `60.0` | Lookup-free window after a fresh match |
+| `recognizer.recheck_interval_seconds` | `45.0` | Cadence for catching track changes |
+| `recognizer.linger_seconds` | `90.0` | How long the last track survives silence |
+| `display.backend` | `pygame` | `pygame`, `web`, `both`, or `none` |
+| `display.rpm` | `33.333` | Rotation speed — `45.0` for a single |
+
+## Running as a service
+
+```bash
+sudo cp systemd/now-spinning.service /etc/systemd/system/
+sudo systemctl edit now-spinning        # set User= and the config path if needed
+sudo systemctl enable --now now-spinning
+journalctl -u now-spinning -f
+```
+
+The unit sets `SDL_VIDEODRIVER=kmsdrm` so the display works on Raspberry Pi OS
+Lite with no desktop environment. The service user needs to be in the `audio` and
+`video` groups:
+
+```bash
+sudo usermod -aG audio,video "$USER"
+```
+
+## Troubleshooting
+
+**No input device found.** `now-spinning devices` shows nothing → install
+`libportaudio2`, confirm `arecord -l` sees the mic, and check group membership.
+
+**Never matches anything.** Run `now-spinning identify` — it prints the captured
+level. Below about −40 dBFS is too quiet; raise the gain in `alsamixer` or move
+the mic closer to the speakers. Recognition is much better on the loud middle of a
+track than on a fade-in.
+
+**Matches, but the screen stays blank.** Check the backend: `--backend both` and
+load `http://<pi>:8000` to see whether the problem is recognition or rendering.
+
+**Black screen on a Pi with no desktop.** The service user needs `video` group
+membership and access to `/dev/dri/card0`. `SDL_VIDEODRIVER=fbcon` is a fallback
+on older images.
+
+**Gate never opens.** Run `calibrate`. If levels look right but the gate stays
+shut, the input is probably failing the flatness test — raise `max_flatness`
+toward `0.5`.
+
+## Development
+
+```bash
+uv venv && uv pip install -e '.[dev]'
+pytest
+ruff check . && mypy nowspinning
+```
+
+Tests use synthetic audio and recorded fixtures; nothing touches the network or a
+sound card, so the suite runs anywhere.
+
+Adding another recognition provider means implementing `Recognizer` in
+`nowspinning/recognize/base.py` — two methods — and registering it in
+`build_recognizer`. Nothing in the engine, the capture layer, or either renderer
+needs to know.
+
+## A note on Shazam
+
+Recognition goes through [`shazamio`](https://github.com/shazamio/ShazamIO), an
+**unofficial** client. It works well and needs no signup, but it is not a
+supported API and could break without warning. This project is for personal use
+next to your own turntable. If you need something contractual, ACRCloud and AudD
+both sell proper APIs, and the `Recognizer` interface is there so you can drop one
+in.
+
+Not affiliated with, endorsed by, or sponsored by Apple Inc. or Shazam
+Entertainment Ltd.
+
+## Roadmap
+
+- Additional recognition providers (ACRCloud, AudD)
+- Optional scrobbling to Last.fm / ListenBrainz
+- Discogs lookup for pressing details
+- Play history and per-record statistics
+
+## License
+
+Apache License 2.0 — see [LICENSE](LICENSE).

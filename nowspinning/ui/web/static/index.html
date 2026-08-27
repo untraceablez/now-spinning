@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#101014" />
+<title>now spinning</title>
+<link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <main class="stage" id="stage" data-status="idle">
+    <div class="platter">
+      <div class="record" id="record">
+        <div class="grooves"></div>
+        <div class="label" id="label">
+          <img id="art" alt="" hidden />
+        </div>
+        <div class="spindle"></div>
+      </div>
+    </div>
+
+    <section class="meta">
+      <p class="heading" id="heading">Ready</p>
+      <h1 class="title" id="title">Drop the needle</h1>
+      <p class="artist" id="artist"></p>
+      <p class="album" id="album"></p>
+      <p class="note" id="note"></p>
+    </section>
+  </main>
+
+  <div class="connection" id="connection" hidden>reconnecting&hellip;</div>
+  <script src="/static/app.js"></script>
+</body>
+</html>

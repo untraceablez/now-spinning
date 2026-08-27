@@ -1,0 +1,85 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "now-spinning"
+version = "0.1.0"
+description = "Listen to a record player, identify what's on the turntable, and show it on a spinning-record display."
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+requires-python = ">=3.10,<3.13"
+authors = [{ name = "Taylor Cohron", email = "taylorcohrontech@gmail.com" }]
+keywords = ["vinyl", "turntable", "raspberry-pi", "now-playing", "shazam", "audio-fingerprinting"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Sound/Audio :: Analysis",
+]
+dependencies = [
+    "aiohttp>=3.9",
+    "numpy>=1.26",
+    "pydantic>=2.9",
+    "PyYAML>=6.0",
+    "shazamio>=0.8.1",
+    "sounddevice>=0.4.6",
+]
+
+[project.optional-dependencies]
+pygame = ["pygame-ce>=2.5"]
+web = ["fastapi>=0.115", "uvicorn[standard]>=0.30"]
+all = ["now-spinning[pygame,web]"]
+dev = [
+    "now-spinning[pygame,web]",
+    "httpx>=0.27",
+    "mypy>=1.11",
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.6",
+    "types-PyYAML",
+]
+
+[project.urls]
+Homepage = "https://github.com/untraceablez/now-spinning"
+Issues = "https://github.com/untraceablez/now-spinning/issues"
+
+[project.scripts]
+now-spinning = "nowspinning.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["nowspinning"]
+
+[tool.hatch.build.targets.sdist]
+include = ["/nowspinning", "/tests", "/systemd", "/config.example.yaml", "/README.md"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "C4", "SIM", "RUF"]
+ignore = ["B008"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E501"]
+
+[tool.mypy]
+python_version = "3.12"  # numpy 2.5 stubs use 3.12-only syntax
+warn_unused_configs = true
+disallow_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = false
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+filterwarnings = ["ignore::DeprecationWarning"]

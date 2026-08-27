@@ -14,7 +14,9 @@ import pytest
 
 os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 
-from nowspinning.config import Config
+from pydantic import ValidationError
+
+from nowspinning.config import Config, DisplayConfig
 from nowspinning.recognize.base import Track
 from nowspinning.state import NowPlaying, StateStore
 from nowspinning.ui.pygame_display import (
@@ -152,3 +154,48 @@ def test_an_unloadable_font_path_falls_back(_pygame_ready, tmp_path):
     view = PygameDisplay(config, StateStore())
     view._pygame = pygame
     assert view.font(20) is not None
+
+
+class TestDeviceIndex:
+    """A GPIO/SPI panel is a second DRM device; SDL needs pointing at it."""
+
+    VAR = "SDL_KMSDRM_DEVICE_INDEX"
+
+    @pytest.fixture(autouse=True)
+    def _isolate(self):
+        # _init_pygame writes straight to os.environ, so save and restore around
+        # every test rather than letting one case decide the next one's default.
+        saved = os.environ.get(self.VAR)
+        os.environ.pop(self.VAR, None)
+        yield
+        os.environ.pop(self.VAR, None)
+        if saved is not None:
+            os.environ[self.VAR] = saved
+
+    def _init(self, cfg) -> str | None:
+        PygameDisplay(cfg, StateStore())._init_pygame()
+        return os.environ.get(self.VAR)
+
+    def test_no_index_is_set_when_unconfigured(self, config):
+        # Default must not touch the variable: on a single-display Pi, SDL's own
+        # choice is right and overriding it would be a regression.
+        assert config.display.device_index is None
+        assert self._init(config) is None
+
+    def test_the_configured_card_reaches_sdl(self, config):
+        config.display.device_index = 1
+        assert self._init(config) == "1"
+
+    def test_card_zero_is_honoured_and_not_mistaken_for_unset(self, config):
+        # 0 is falsy; the check must be `is not None` or an explicit card0 is dropped.
+        config.display.device_index = 0
+        assert self._init(config) == "0"
+
+    def test_the_environment_wins_over_the_config(self, config):
+        config.display.device_index = 1
+        os.environ[self.VAR] = "2"
+        assert self._init(config) == "2"
+
+    def test_a_negative_card_is_rejected(self):
+        with pytest.raises(ValidationError):
+            DisplayConfig(device_index=-1)

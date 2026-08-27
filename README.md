@@ -127,6 +127,35 @@ The keys worth knowing:
 | `recognizer.linger_seconds` | `90.0` | How long the last track survives silence |
 | `display.backend` | `pygame` | `pygame`, `web`, `both`, or `none` |
 | `display.rpm` | `33.333` | Rotation speed — `45.0` for a single |
+| `display.device_index` | system default | Which `/dev/dri/card` to draw on; needed for a GPIO/SPI panel, usually `1` |
+
+## Small SPI displays
+
+The cheap 3.5" 480×320 panels that sit on the GPIO header (ILI9486 — Waveshare
+"RPi LCD 3.5", and the Inland/GoodTFT clones of it) work, but **not** via the
+vendor's `LCD35-show` script. That script installs a legacy `fbtft` framebuffer
+driver and edits `/boot/config.txt`, which moved to `/boot/firmware/config.txt`;
+on a Pi 5 it typically leaves you with no display output at all. The `fbcp`
+mirroring trick is also dead on Pi 5 — it used DispmanX, which that board removed.
+
+Use the in-tree overlay's DRM mode instead. In `/boot/firmware/config.txt`:
+
+```
+dtoverlay=piscreen,drm,rotate=90,speed=24000000,fps=30
+```
+
+The `drm` flag is the important part: it binds the KMS/DRM `ili9486` driver
+rather than `fbtft`, giving a real `/dev/dri/card*` node that SDL can render to.
+Then point this program at that card:
+
+```yaml
+display:
+  device_index: 1     # check `ls /dev/dri/` -- HDMI is card0
+  width: 480
+  height: 320
+```
+
+`rotate=90` gives 480×320 landscape; drop it for 320×480 portrait.
 
 ## Running as a service
 
@@ -172,8 +201,12 @@ track than on a fade-in.
 load `http://<pi>:8000` to see whether the problem is recognition or rendering.
 
 **Black screen on a Pi with no desktop.** The service user needs `video` group
-membership and access to `/dev/dri/card0`. `SDL_VIDEODRIVER=fbcon` is a fallback
-on older images.
+membership and access to `/dev/dri/card*`.
+
+**Black screen on a GPIO/SPI panel.** A SPI panel is a *second* DRM device —
+HDMI is `card0`, the panel is usually `card1` — and SDL takes `card0` unless told
+otherwise, so it renders to the port nobody is looking at. Check `ls /dev/dri/`,
+then set `display.device_index: 1`. See [Small SPI displays](#small-spi-displays).
 
 **Gate never opens.** Run `calibrate`. If levels look right but the gate stays
 shut, the input is probably failing the flatness test — raise `max_flatness`

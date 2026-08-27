@@ -81,6 +81,11 @@ display:
   # Rotation speed of the on-screen record. 45.0 if you mostly play singles.
   rpm: 33.333
   show_cursor: false
+  # Which /dev/dri/card to draw on. Leave null unless there is more than one --
+  # a GPIO/SPI panel (a 3.5" ILI9486 hat, say) comes up as its own DRM device,
+  # normally card1, while HDMI holds card0. SDL takes card0 by default, so
+  # without this the panel stays black. Check with `ls /dev/dri/`.
+  device_index: null
   background: "#101014"
   foreground: "#f5f2ea"
   accent: "#c8a24a"

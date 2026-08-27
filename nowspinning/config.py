@@ -139,6 +139,15 @@ class DisplayConfig(_Base):
         default=33.333, gt=0.0, description="Record rotation speed. 45.0 for a single."
     )
     show_cursor: bool = False
+    device_index: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Which /dev/dri/card to render on. Only needed when more than one exists "
+            "-- a GPIO/SPI panel usually lands on card1 while HDMI holds card0, and "
+            "SDL would otherwise pick card0 and leave the panel black."
+        ),
+    )
     background: str = "#101014"
     foreground: str = "#f5f2ea"
     accent: str = "#c8a24a"

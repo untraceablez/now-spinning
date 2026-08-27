@@ -99,6 +99,11 @@ class PygameDisplay:
         # A framebuffer console has no windowing system; without this SDL refuses to
         # start on a headless Pi. An existing choice from the environment wins.
         os.environ.setdefault("SDL_VIDEODRIVER", "kmsdrm")
+        # An SPI panel (a 3.5" ILI9486 hat, say) is its own DRM device, usually
+        # card1, and SDL takes card0 unless told otherwise -- which on a Pi with
+        # HDMI present means rendering to the port nobody is looking at.
+        if self.config.display.device_index is not None:
+            os.environ.setdefault("SDL_KMSDRM_DEVICE_INDEX", str(self.config.display.device_index))
         os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
         try:
             import pygame

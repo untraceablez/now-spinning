@@ -8,6 +8,7 @@ straight away, and never blank the screen just because one lookup missed.
 from __future__ import annotations
 
 import contextlib
+import wave
 
 import pytest
 
@@ -311,3 +312,35 @@ async def test_the_level_meter_is_published_but_not_on_every_tick(
 
     assert store.snapshot().level_dbfs > -60.0
     assert len(set(seen)) < 10, "a steady level must not wake renderers every tick"
+
+
+# -- across sample rates ---------------------------------------------------
+
+
+@pytest.mark.parametrize("rate", [8000, 16000, 20000, 44100, 48000, 96000])
+async def test_the_whole_pipeline_runs_at_every_negotiable_rate(fast_config, clock, tmp_path, rate):
+    """Capture takes whatever the hardware offers, so everything downstream has to
+    cope: detection, clip encoding, and the WAV handed to the recognizer."""
+    capture = FakeCapture(sample_rate=rate)
+    recognizer = FakeRecognizer([TRACK_A])
+    engine, store = make_engine(fast_config, capture, recognizer, clock, tmp_path)
+
+    await play_until_match(engine, clock, capture)
+
+    assert store.snapshot().track is not None
+    with wave.open(str(recognizer.calls[0]), "rb") as clip:
+        assert clip.getframerate() == rate, "the clip must carry the rate it was captured at"
+        assert clip.getnframes() == int(fast_config.audio.clip_seconds * rate)
+        assert clip.getnchannels() == 1
+
+
+@pytest.mark.parametrize("rate", [8000, 16000, 20000, 44100, 48000, 96000])
+async def test_silence_is_still_ignored_at_every_rate(fast_config, clock, tmp_path, rate):
+    capture = FakeCapture(sample_rate=rate)
+    recognizer = FakeRecognizer([TRACK_A])
+    engine, _ = make_engine(fast_config, capture, recognizer, clock, tmp_path)
+
+    for _ in range(10):
+        await step(engine, clock)
+
+    assert recognizer.call_count == 0

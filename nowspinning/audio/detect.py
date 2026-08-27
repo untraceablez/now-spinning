@@ -23,6 +23,19 @@ from nowspinning.config import DetectConfig
 #: Floor for the dBFS conversion, so digital silence yields a finite number.
 SILENCE_FLOOR_DBFS = -120.0
 
+#: Flatness is measured over this band only, in Hz.
+#:
+#: Without it the measurement would depend on the sample rate: a 96 kHz capture
+#: spends most of its spectrum on an empty, flat noise floor above 20 kHz, which
+#: would drag a record's flatness up toward the value plain noise produces. Fixing
+#: the band means one ``max_flatness`` setting behaves the same on every mic. The
+#: upper edge is also the old effective limit at 16 kHz, so the default threshold
+#: stays calibrated for anyone already running at that rate.
+ANALYSIS_BAND_HZ = (50.0, 8000.0)
+
+#: Below this many bins the band is too narrow to say anything useful.
+_MIN_BAND_BINS = 8
+
 _EPS = 1e-12
 
 
@@ -41,22 +54,40 @@ def dbfs(frame: np.ndarray) -> float:
     return max(SILENCE_FLOOR_DBFS, 20.0 * float(np.log10(amplitude)))
 
 
-def spectral_flatness(frame: np.ndarray) -> float:
+def spectral_flatness(
+    frame: np.ndarray,
+    sample_rate: int,
+    band: tuple[float, float] = ANALYSIS_BAND_HZ,
+) -> float:
     """Ratio of geometric to arithmetic mean of the power spectrum, in [0.0, 1.0].
 
-    Near 1.0 for white noise, near 0.0 for a pure tone. DC is excluded because a
-    microphone's DC offset would otherwise dominate a quiet frame.
+    Near 1.0 for white noise, near 0.0 for a pure tone. Measured over ``band``
+    only, so the result means the same thing whether the microphone runs at 16 kHz
+    or 96 kHz. DC is excluded either way: a microphone's DC offset would otherwise
+    dominate a quiet frame.
     """
-    if frame.size < 32:
+    if frame.size < 32 or sample_rate <= 0:
         return 1.0
+
     windowed = frame.astype(np.float64) * np.hanning(frame.size)
     power = np.abs(np.fft.rfft(windowed)) ** 2
-    power = power[1:]  # drop DC
-    if power.size == 0:
+    frequencies = np.fft.rfftfreq(frame.size, d=1.0 / sample_rate)
+
+    low, high = band
+    high = min(high, sample_rate / 2.0)
+    selected = power[(frequencies >= low) & (frequencies <= high)]
+    if selected.size < _MIN_BAND_BINS:
+        selected = power[1:]  # very short frame or very low rate: use everything but DC
+    if selected.size == 0:
         return 1.0
-    power = power + _EPS
-    geometric = float(np.exp(np.mean(np.log(power))))
-    arithmetic = float(np.mean(power))
+
+    # A floor relative to the band's own energy, so the answer depends on the shape
+    # of the spectrum and not on how loud the room happens to be.
+    floor = max(_EPS, float(np.mean(selected)) * 1e-10)
+    selected = selected + floor
+
+    geometric = float(np.exp(np.mean(np.log(selected))))
+    arithmetic = float(np.mean(selected))
     if arithmetic <= 0.0:
         return 1.0
     return float(min(1.0, max(0.0, geometric / arithmetic)))
@@ -78,8 +109,8 @@ class FrameStats:
         return self.level_dbfs < config.silence_threshold_dbfs
 
 
-def analyze(frame: np.ndarray) -> FrameStats:
-    return FrameStats(level_dbfs=dbfs(frame), flatness=spectral_flatness(frame))
+def analyze(frame: np.ndarray, sample_rate: int) -> FrameStats:
+    return FrameStats(level_dbfs=dbfs(frame), flatness=spectral_flatness(frame, sample_rate))
 
 
 class GateEvent(Enum):
@@ -120,9 +151,9 @@ class MusicGate:
         self._music_since = None
         self._quiet_since = None
 
-    def observe(self, frame: np.ndarray, now: float) -> GateEvent:
+    def observe(self, frame: np.ndarray, sample_rate: int, now: float) -> GateEvent:
         """Feed one analysis frame captured at monotonic time ``now``."""
-        return self.observe_stats(analyze(frame), now)
+        return self.observe_stats(analyze(frame, sample_rate), now)
 
     def observe_stats(self, stats: FrameStats, now: float) -> GateEvent:
         """Feed pre-computed stats -- lets the engine analyze once and reuse."""

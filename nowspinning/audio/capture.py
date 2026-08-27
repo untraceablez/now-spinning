@@ -21,7 +21,21 @@ log = logging.getLogger(__name__)
 #: Rates to try when neither the configured rate nor the device's own default is
 #: accepted. USB interfaces are opened through ALSA's raw device, which will not
 #: resample for us, so the rate has to be one the hardware genuinely runs at.
-FALLBACK_SAMPLE_RATES: tuple[int, ...] = (48000, 44100, 32000, 16000, 8000)
+#: Ordered by how widely supported they are, cheapest first -- everything
+#: downstream is rate-agnostic, so the only cost of a high rate is CPU and memory.
+FALLBACK_SAMPLE_RATES: tuple[int, ...] = (
+    48000,
+    44100,
+    32000,
+    24000,
+    22050,
+    16000,
+    96000,
+    88200,
+    20000,
+    11025,
+    8000,
+)
 
 
 class AudioError(RuntimeError):

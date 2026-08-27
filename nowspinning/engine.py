@@ -116,7 +116,7 @@ class Engine:
     async def tick(self) -> None:
         now = self.clock()
         frame = self.capture.snapshot(self.config.detect.frame_seconds)
-        stats = analyze(frame)
+        stats = analyze(frame, self.capture.sample_rate)
         event = self.gate.observe_stats(stats, now)
 
         if event is GateEvent.MUSIC_STARTED:

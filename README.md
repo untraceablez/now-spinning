@@ -48,6 +48,13 @@ The parts that make it usable next to a real turntable are all in the policy:
 - A Raspberry Pi 3 or newer (a Pi Zero 2 W works), a USB microphone, and a display.
 - `libportaudio2` for microphone capture.
 
+Any microphone PortAudio can open will do. Capture negotiates its format at
+startup rather than demanding one, so a 16 kHz USB conference mic and a 96 kHz
+audio interface both work with no configuration — it tries the configured rate,
+then the device's own, then 48000, 44100, 32000, 24000, 22050, 16000, 96000,
+88200, 20000, 11025 and 8000, and logs what it settled on. Mono and stereo inputs
+are both fine; stereo is downmixed.
+
 ## Install
 
 ```bash
@@ -107,7 +114,7 @@ The keys worth knowing:
 | Key | Default | What it does |
 | --- | --- | --- |
 | `audio.device` | system default | Device index, or a substring of its name so it survives renumbering |
-| `audio.sample_rate` | `16000` | *Preferred* rate; capture falls back to one the device accepts |
+| `audio.sample_rate` | `16000` | *Preferred* rate; capture negotiates down to one the device accepts |
 | `audio.clip_seconds` | `8.0` | How much audio each lookup gets |
 | `detect.start_threshold_dbfs` | `-45.0` | Level at which the gate opens |
 | `detect.silence_threshold_dbfs` | `-50.0` | Level below which quiet starts counting |
@@ -163,7 +170,9 @@ on older images.
 
 **Gate never opens.** Run `calibrate`. If levels look right but the gate stays
 shut, the input is probably failing the flatness test — raise `max_flatness`
-toward `0.5`.
+toward `0.5`. The threshold does not need adjusting for a different sample rate:
+flatness is measured over a fixed 50 Hz–8 kHz band precisely so that one setting
+means the same thing on a 16 kHz mic and a 96 kHz interface.
 
 ## Development
 

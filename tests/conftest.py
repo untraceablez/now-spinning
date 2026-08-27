@@ -34,6 +34,23 @@ def room_noise(
     return (rng.standard_normal(int(seconds * sample_rate)) * amplitude).astype(np.float32)
 
 
+def record_like(
+    seconds: float = 0.5,
+    sample_rate: int = SAMPLE_RATE,
+    amplitude: float = 0.3,
+    hiss: float = 0.12,
+) -> np.ndarray:
+    """Harmonics plus surface noise -- closer to what a needle actually produces."""
+    rng = np.random.default_rng(1959)
+    t = np.arange(int(seconds * sample_rate)) / sample_rate
+    signal = np.zeros_like(t)
+    for freq in (110.0, 220.0, 277.0, 330.0, 440.0, 554.0, 660.0, 880.0, 1320.0):
+        signal += np.sin(2 * np.pi * freq * t + rng.uniform(0, 2 * np.pi)) / (1 + freq / 300)
+    signal /= np.max(np.abs(signal))
+    mixed = signal * (1.0 - hiss) + rng.standard_normal(t.size) * hiss
+    return (mixed / np.max(np.abs(mixed)) * amplitude).astype(np.float32)
+
+
 @pytest.fixture
 def config() -> Config:
     return Config()

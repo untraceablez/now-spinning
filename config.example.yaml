@@ -12,10 +12,13 @@ audio:
   # indexes get renumbered when USB devices come and go. `now-spinning devices`
   # lists what is available. null uses the system default input.
   device: null
-  # Preferred capture format. Both are negotiated at startup: USB interfaces
-  # commonly run at exactly one rate (48000 is typical) and PortAudio opens them
-  # through ALSA's raw device, which does not resample, so capture falls back to a
-  # rate the hardware actually accepts and logs what it chose.
+  # Preferred capture format. Both are negotiated at startup, because USB devices
+  # commonly run at exactly one rate and PortAudio opens them through ALSA's raw
+  # device, which does not resample. Capture tries this rate, then the device's own
+  # default, then 48000, 44100, 32000, 24000, 22050, 16000, 96000, 88200, 20000,
+  # 11025 and 8000, and logs what it settled on. Everything downstream is
+  # rate-agnostic, so there is no wrong answer here -- a higher rate just costs a
+  # little more CPU and memory.
   sample_rate: 16000
   channels: 1
   block_size: 1024

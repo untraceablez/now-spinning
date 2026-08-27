@@ -243,7 +243,7 @@ def cmd_calibrate(args: argparse.Namespace) -> int:
             frame = capture.snapshot(detect.frame_seconds)
             if frame.size == 0:
                 continue
-            stats = analyze(frame)
+            stats = analyze(frame, capture.sample_rate)
             event = gate.observe_stats(stats, time.monotonic())
             bar = "#" * max(0, min(40, int((stats.level_dbfs + 80.0) / 2.0)))
             marker = "MUSIC " if gate.is_open else "quiet "
@@ -285,7 +285,7 @@ def cmd_identify(args: argparse.Namespace) -> int:
     finally:
         capture.stop()
 
-    stats = analyze(samples)
+    stats = analyze(samples, capture.sample_rate)
     print(
         f"Captured {samples.size / capture.sample_rate:.1f}s at "
         f"{stats.level_dbfs:.1f} dBFS (flatness {stats.flatness:.2f})",

@@ -148,14 +148,6 @@ class DisplayConfig(_Base):
             "SDL would otherwise pick card0 and leave the panel black."
         ),
     )
-    swap_rb: bool = Field(
-        default=False,
-        description=(
-            "Exchange red and blue in the finished frame. Some cheap SPI panels are "
-            "wired RGB while their driver assumes BGR, which shows red as blue; the "
-            "kernel offers no override, so correct it here."
-        ),
-    )
     background: str = "#101014"
     foreground: str = "#f5f2ea"
     accent: str = "#c8a24a"

@@ -81,10 +81,6 @@ display:
   # Rotation speed of the on-screen record. 45.0 if you mostly play singles.
   rpm: 33.333
   show_cursor: false
-  # Exchange red and blue in the finished frame. Some cheap SPI panels are wired
-  # RGB while their kernel driver assumes BGR, so red shows as blue; there is no
-  # device-tree override for it, so correct it here.
-  swap_rb: false
   # Which /dev/dri/card to draw on. Leave null unless there is more than one --
   # a GPIO/SPI panel (a 3.5" ILI9486 hat, say) comes up as its own DRM device,
   # normally card1, while HDMI holds card0. SDL takes card0 by default, so

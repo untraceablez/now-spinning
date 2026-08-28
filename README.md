@@ -127,7 +127,6 @@ The keys worth knowing:
 | `recognizer.linger_seconds` | `90.0` | How long the last track survives silence |
 | `display.backend` | `pygame` | `pygame`, `web`, `both`, or `none` |
 | `display.rpm` | `33.333` | Rotation speed — `45.0` for a single |
-| `display.swap_rb` | `false` | Exchange red and blue — for SPI panels that show red as blue |
 | `display.device_index` | system default | Which `/dev/dri/card` to draw on; needed for a GPIO/SPI panel, usually `1` |
 
 ## Small SPI displays
@@ -171,20 +170,6 @@ so `rotate=90` turns the panel portrait, which is the opposite of what the
 parameter name suggests. Add it only if you actually want 320×480. (The
 parameter reads the other way round for the legacy fbtft driver, which is where
 the confusion comes from.)
-
-**If red shows as blue**, your clone is wired RGB while the driver assumes BGR.
-The driver sets that bit unconditionally —
-
-```c
-addr_mode |= ILI9486_MADCTL_BGR;
-```
-
-— so there is no overlay parameter for it. Set `display.swap_rb: true` and this
-program corrects its own output. That fixes this display only; to fix the whole
-system (desktop included) you would need to drive the panel through
-`dtoverlay=mipi-dbi-spi` with a custom `panel.bin` whose `0x36` address-mode byte
-clears bit 3 — at the cost of setting the touchscreen up separately, since that
-overlay does not include it.
 
 ## Running as a service
 

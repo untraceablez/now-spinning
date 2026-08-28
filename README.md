@@ -10,9 +10,9 @@ attached display with the track, artist, and album.
 ![The pygame display showing a spinning record with the track, artist, and album](docs/screenshot.png)
 
 Two styles, set with `display.style`. **`sleeve`** (the default, shown above) puts
-the cover in a record sleeve with the disc pulled halfway out; **`record`** puts it
-on the label of a turning platter. Both fall back to a placeholder until the cover
-art has been fetched.
+the cover in a record sleeve with the disc pulled halfway out and turning;
+**`record`** puts it on the label of a turning platter. Both fall back to a
+placeholder until the cover art has been fetched.
 
 ## How it works
 

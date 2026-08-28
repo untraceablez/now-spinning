@@ -41,12 +41,24 @@ ASSETS = Path(__file__).with_name("assets")
 #: than it is wide.
 ART_WINDOW = (27 / 453, 14 / 387, 355 / 453, 355 / 387)
 
+#: The disc in sleeve.png, as fractions of that image, fitted from its opaque
+#: pixels: centre (274.2, 194.0) and radius 172.6 in a 453x387 sheet, which
+#: reproduces every measured column to within a pixel.
+DISC_CENTRE = (274.2 / 453, 194.0 / 387)
+DISC_RADIUS = 172.6 / 453
+
+#: Where the sleeve's right edge cuts across the disc. Only the crescent to the
+#: right of this is visible, so it is the only part worth drawing motion into.
+SLEEVE_RIGHT = 381 / 453
+
 Color = tuple[int, int, int]
 
 #: Fraction of the platter diameter taken up by the paper label.
 LABEL_RATIO = 0.36
 SPINDLE_RATIO = 0.028
 GROOVE_GAPS = 4
+#: Groove gaps on the exposed disc; lighter than the artwork's (28, 28, 28).
+DISC_GROOVE: Color = (92, 92, 100)
 
 
 def parse_color(value: str, fallback: Color = (0, 0, 0)) -> Color:
@@ -275,25 +287,71 @@ class PygameDisplay:
                 box_size = (int(width * 0.52), int(height * 0.92))
             box = self._pygame.Rect((0, 0), box_size)
             box.center = centre
-            self._draw_sleeve(box, state)
+            drawn = self._draw_sleeve(box, state)
+            if drawn is not None and not stacked:
+                # Measure the gap from where the artwork actually ends. The image
+                # keeps its own proportions inside the box, so a fraction of the
+                # panel width would sometimes leave the text touching the disc.
+                text_left = drawn.right + int(width * 0.05)
+                text_rect = (text_left, 0, max(1, width - text_left - int(width * 0.05)), height)
         else:
             self._draw_record(centre, diameter, state)
         self._draw_panel(text_rect, state, centred=stacked)
 
     # -- sleeve ----------------------------------------------------------
 
-    def _draw_sleeve(self, box: Any, state: NowPlaying) -> None:
-        """Cover art in a record sleeve, disc protruding, after the Bowtie theme."""
+    def _draw_sleeve(self, box: Any, state: NowPlaying) -> Any:
+        """Cover art in a record sleeve, disc protruding, after the Bowtie theme.
+
+        Returns the rect the sleeve was drawn into, so the caller can lay text out
+        beside it, or ``None`` if the asset is missing and the record was drawn.
+        """
         sleeve = self._get_sleeve(box.width, box.height)
         if sleeve is None:  # asset missing; fall back rather than show nothing
             self._draw_record(box.center, min(box.width, box.height), state)
-            return
+            return None
         rect = sleeve.get_rect(center=box.center)
         window = self._art_window(rect)
         cover = self._get_cover(window.width, window.height, state)
         if cover is not None:
             self._screen.blit(cover, window)
         self._screen.blit(sleeve, rect)
+        self._draw_disc_motion(rect)
+        return rect
+
+    def _draw_disc_motion(self, sleeve_rect: Any) -> None:
+        """Turn the exposed sliver of the disc.
+
+        The disc in the artwork is drawn as concentric rings, which are unchanged
+        by rotation -- spinning the image itself would look completely static. So
+        the motion comes from groove gaps, the same trick the record style uses,
+        clipped to the crescent the sleeve does not cover.
+        """
+        pygame = self._pygame
+        cx = sleeve_rect.x + sleeve_rect.width * DISC_CENTRE[0]
+        cy = sleeve_rect.y + sleeve_rect.height * DISC_CENTRE[1]
+        radius = sleeve_rect.width * DISC_RADIUS
+        edge = sleeve_rect.x + sleeve_rect.width * SLEEVE_RIGHT
+        if radius < 8 or cx + radius <= edge:
+            return
+
+        crescent = pygame.Rect(
+            round(edge), round(cy - radius), round(cx + radius - edge) + 1, round(radius * 2) + 1
+        )
+        previous = self._screen.get_clip()
+        self._screen.set_clip(crescent.clip(self._screen.get_rect()))
+        try:
+            thickness = max(1, round(radius / 40))
+            for i in range(GROOVE_GAPS):
+                # Only radii past the sleeve edge ever show, so the gaps live in
+                # the outer third of the disc rather than spread across it.
+                gap_radius = radius * (0.74 + 0.07 * i)
+                start = math.radians(self.angle + i * (360.0 / GROOVE_GAPS))
+                span = pygame.Rect(0, 0, round(gap_radius * 2), round(gap_radius * 2))
+                span.center = (round(cx), round(cy))
+                pygame.draw.arc(self._screen, DISC_GROOVE, span, start, start + 0.30, thickness)
+        finally:
+            self._screen.set_clip(previous)
 
     @staticmethod
     def _art_window(sleeve_rect: Any) -> Any:

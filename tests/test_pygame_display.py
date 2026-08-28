@@ -22,6 +22,7 @@ from nowspinning.recognize.base import Track
 from nowspinning.state import NowPlaying, StateStore
 from nowspinning.ui.pygame_display import (
     ASSETS,
+    SLEEVE_RIGHT,
     PygameDisplay,
     Theme,
     mix,
@@ -383,3 +384,78 @@ class TestSleeveStyle:
         d = self._display(config, size)
         d.store.update(status="playing", track=TRACK)
         d.draw(d.store.snapshot())
+
+
+class TestSleeveMotion:
+    """The exposed sliver of disc has to actually turn."""
+
+    def _display(self, config, size=(480, 320)):
+        config.display.width, config.display.height = size
+        config.display.fullscreen = False
+        d = PygameDisplay(config, StateStore())
+        d._pygame = d._init_pygame()
+        d._open_window()
+        d.store.update(status="playing", track=TRACK)
+        return d
+
+    @staticmethod
+    def _crescent_pixels(d):
+        """Bytes of the region where the disc shows past the sleeve."""
+        box = d._pygame.Rect(0, 0, d.config.display.width, d.config.display.height)
+        sleeve = d._get_sleeve(int(box.w * 0.52), int(box.h * 0.92))
+        rect = sleeve.get_rect(center=(int(box.w * 0.28), box.h // 2))
+        crescent = d._pygame.Rect(
+            rect.x + int(rect.w * SLEEVE_RIGHT),
+            rect.y,
+            rect.w - int(rect.w * SLEEVE_RIGHT),
+            rect.h,
+        ).clip(d._screen.get_rect())
+        return d._pygame.image.tostring(d._screen.subsurface(crescent).copy(), "RGB")
+
+    def test_turning_changes_the_visible_disc(self, config):
+        # The artwork's grooves are concentric, so rotating the image itself would
+        # produce an identical picture. This is the test that catches that.
+        d = self._display(config)
+        d.angle = 0.0
+        d.draw(d.store.snapshot())
+        still = self._crescent_pixels(d)
+        d.angle = 40.0
+        d.draw(d.store.snapshot())
+        turned = self._crescent_pixels(d)
+        assert still != turned
+
+    def test_the_same_angle_draws_the_same_thing(self, config):
+        d = self._display(config)
+        d.angle = 17.0
+        d.draw(d.store.snapshot())
+        first = self._crescent_pixels(d)
+        d.draw(d.store.snapshot())
+        assert first == self._crescent_pixels(d)
+
+    def test_the_clip_is_restored_afterwards(self, config):
+        # Leaving a clip set would silently crop everything drawn next frame.
+        d = self._display(config)
+        before = d._screen.get_clip()
+        d.draw(d.store.snapshot())
+        assert d._screen.get_clip() == before
+
+    def test_motion_is_skipped_when_the_disc_is_too_small(self, config):
+        # Tiny panels: the arcs would be sub-pixel noise, and the clip rect could
+        # collapse. It must decline rather than raise.
+        d = self._display(config, (64, 48))
+        d.draw(d.store.snapshot())
+
+    def test_the_text_does_not_touch_the_sleeve(self, config, monkeypatch):
+        d = self._display(config)
+        captured = {}
+        original = d._draw_panel
+        monkeypatch.setattr(
+            d,
+            "_draw_panel",
+            lambda rect, *a, **k: (captured.update(rect=rect), original(rect, *a, **k))[1],
+        )
+        d.draw(d.store.snapshot())
+        sleeve = d._get_sleeve(int(480 * 0.52), int(320 * 0.92))
+        right = sleeve.get_rect(center=(int(480 * 0.28), 160)).right
+        assert captured["rect"][0] > right, "text starts before the sleeve ends"
+        assert captured["rect"][0] - right >= 480 * 0.04, "gap is too tight"

@@ -87,6 +87,7 @@ class PygameDisplay:
 
         self._pygame: Any = None
         self._screen: Any = None
+        self._canvas: Any = None
         self._clock: Any = None
         self._platter: Any = None
         self._label_cache: dict[str, Any] = {}
@@ -122,6 +123,12 @@ class PygameDisplay:
         size = (display.width, display.height) if display.width and display.height else (0, 0)
         flags = pygame.FULLSCREEN | pygame.SCALED if display.fullscreen else 0
         self._screen = pygame.display.set_mode(size, flags)
+        # With the channel swap on, draw into a 32-bit surface we own rather than
+        # the display surface: a 16-bit framebuffer (RGB565, what these SPI panels
+        # use) cannot be addressed per-channel by surfarray at all.
+        self._canvas = (
+            pygame.Surface(self._screen.get_size(), depth=32) if display.swap_rb else self._screen
+        )
         pygame.display.set_caption("now-spinning")
         pygame.mouse.set_visible(display.show_cursor)
         self._clock = pygame.time.Clock()
@@ -159,10 +166,25 @@ class PygameDisplay:
                 dt = self._clock.tick(self.config.display.fps) / 1000.0
                 self.angle = (self.angle + self.config.display.rpm * 6.0 * dt) % 360.0
                 self.draw(self.store.snapshot())
+                self._present()
                 pygame.display.flip()
         finally:
             pygame.quit()
             log.info("display closed")
+
+    @property
+    def _target(self) -> Any:
+        """Surface drawing goes to: the owned canvas if there is one, else the display."""
+        return self._screen if self._canvas is None else self._canvas
+
+    def _present(self) -> None:
+        """Move the finished frame onto the display surface."""
+        if self._canvas is None or self._canvas is self._screen:
+            return
+        pixels = self._pygame.surfarray.pixels3d(self._canvas)
+        pixels[:, :, [0, 2]] = pixels[:, :, [2, 0]]
+        del pixels  # the surface stays locked until the view is released
+        self._screen.blit(self._canvas, (0, 0))
 
     def _pump_events(self) -> bool:
         pygame = self._pygame
@@ -176,7 +198,7 @@ class PygameDisplay:
     # -- drawing ---------------------------------------------------------
 
     def draw(self, state: NowPlaying) -> None:
-        screen = self._screen
+        screen = self._target
         width, height = screen.get_size()
         screen.fill(self.theme.background)
 
@@ -205,7 +227,7 @@ class PygameDisplay:
         pygame = self._pygame
         platter = self._get_platter(diameter)
         rect = platter.get_rect(center=centre)
-        self._screen.blit(platter, rect)
+        self._target.blit(platter, rect)
 
         radius = diameter // 2
         # Groove gaps: the visible bands between tracks. Rotating these is what
@@ -216,14 +238,14 @@ class PygameDisplay:
             box = pygame.Rect(0, 0, gap_radius * 2, gap_radius * 2)
             box.center = centre
             width = max(1, radius // 90)
-            pygame.draw.arc(self._screen, (58, 58, 64), box, start, start + 0.16, width)
+            pygame.draw.arc(self._target, (58, 58, 64), box, start, start + 0.16, width)
 
         label = self._get_label(int(diameter * LABEL_RATIO), state)
         rotated = pygame.transform.rotozoom(label, -self.angle, 1.0)
-        self._screen.blit(rotated, rotated.get_rect(center=centre))
+        self._target.blit(rotated, rotated.get_rect(center=centre))
 
         spindle = max(3, int(diameter * SPINDLE_RATIO))
-        pygame.draw.circle(self._screen, self.theme.background, centre, spindle)
+        pygame.draw.circle(self._target, self.theme.background, centre, spindle)
 
     def _get_platter(self, diameter: int) -> Any:
         """The static vinyl disc. Re-rendered only when the size changes."""
@@ -307,7 +329,7 @@ class PygameDisplay:
         for gap, surface in blocks:
             y += gap
             x = left + (width - surface.get_width()) // 2 if centred else left
-            self._screen.blit(surface, (x, y))
+            self._target.blit(surface, (x, y))
             y += surface.get_height()
 
     def _panel_blocks(self, state: NowPlaying, width: int, height: int) -> list[tuple[int, Any]]:

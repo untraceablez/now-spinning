@@ -199,3 +199,64 @@ class TestDeviceIndex:
     def test_a_negative_card_is_rejected(self):
         with pytest.raises(ValidationError):
             DisplayConfig(device_index=-1)
+
+
+class TestSwapRedBlue:
+    """Some SPI panels are wired RGB while the kernel driver assumes BGR."""
+
+    def _frame(self, config):
+        d = PygameDisplay(config, StateStore())
+        d._pygame = d._init_pygame()
+        d._open_window()
+        d._canvas.fill((200, 30, 10))  # unmistakably red
+        d._present()
+        return d._screen.get_at((0, 0))[:3]
+
+    def test_off_by_default_and_leaves_colour_alone(self, config):
+        assert config.display.swap_rb is False
+        config.display.width, config.display.height = 64, 64
+        config.display.fullscreen = False
+        assert self._frame(config) == (200, 30, 10)
+
+    def test_red_and_blue_are_exchanged_when_enabled(self, config):
+        config.display.swap_rb = True
+        config.display.width, config.display.height = 64, 64
+        config.display.fullscreen = False
+        assert self._frame(config) == (10, 30, 200)
+
+    def test_green_is_untouched(self, config):
+        config.display.swap_rb = True
+        config.display.width, config.display.height = 64, 64
+        config.display.fullscreen = False
+        d = PygameDisplay(config, StateStore())
+        d._pygame = d._init_pygame()
+        d._open_window()
+        d._canvas.fill((0, 255, 0))
+        d._present()
+        assert d._screen.get_at((0, 0))[:3] == (0, 255, 0)
+
+    def test_swapping_twice_is_the_identity(self, config):
+        # Guards against a buggy in-place swap that assigns both channels from
+        # the same source and collapses them to one value.
+        config.display.swap_rb = True
+        config.display.width, config.display.height = 64, 64
+        config.display.fullscreen = False
+        d = PygameDisplay(config, StateStore())
+        d._pygame = d._init_pygame()
+        d._open_window()
+        d._canvas.fill((200, 30, 10))
+        d._present()
+        d._present()
+        assert d._canvas.get_at((0, 0))[:3] == (200, 30, 10)
+
+    def test_a_real_frame_renders_with_the_swap_on(self, config):
+        # The whole draw path must survive the extra surface, not just a fill.
+        config.display.swap_rb = True
+        config.display.width, config.display.height = 480, 320
+        config.display.fullscreen = False
+        d = PygameDisplay(config, StateStore())
+        d._pygame = d._init_pygame()
+        d._open_window()
+        d.draw(d.store.snapshot())
+        d._present()
+        assert d._screen.get_size() == (480, 320)

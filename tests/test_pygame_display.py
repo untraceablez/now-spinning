@@ -243,3 +243,57 @@ class TestVideoDriverSelection:
         d._pygame = d._init_pygame()
         d._open_window()
         assert d._screen.get_size() == (64, 64)
+
+
+class TestFullscreenSizing:
+    """The default config is fullscreen at the display's native size."""
+
+    def _display(self, config):
+        d = PygameDisplay(config, StateStore())
+        d._pygame = d._init_pygame()
+        return d
+
+    def test_the_default_config_opens(self, config, monkeypatch):
+        # width/height default to 0 meaning "native". Combining that with SCALED
+        # raises "Cannot set 0 sized SCALED display mode", so this is the exact
+        # path a stock `now-spinning run` takes on a real panel.
+        monkeypatch.setenv("SDL_VIDEODRIVER", "dummy")
+        assert config.display.fullscreen is True
+        assert (config.display.width, config.display.height) == (0, 0)
+        d = self._display(config)
+        d._open_window()
+        assert d._screen is not None
+
+    def test_native_fullscreen_does_not_request_scaled(self, config, monkeypatch):
+        monkeypatch.setenv("SDL_VIDEODRIVER", "dummy")
+        d = self._display(config)
+        size, flags = d._display_mode()
+        assert size == (0, 0)
+        assert flags & d._pygame.FULLSCREEN
+        assert not flags & d._pygame.SCALED
+
+    def test_an_explicit_size_still_gets_scaled(self, config, monkeypatch):
+        monkeypatch.setenv("SDL_VIDEODRIVER", "dummy")
+        config.display.width, config.display.height = 480, 320
+        d = self._display(config)
+        size, flags = d._display_mode()
+        assert size == (480, 320)
+        assert flags & d._pygame.SCALED
+        d._open_window()
+        assert d._screen.get_size() == (480, 320)
+
+    def test_windowed_uses_no_flags(self, config, monkeypatch):
+        monkeypatch.setenv("SDL_VIDEODRIVER", "dummy")
+        config.display.fullscreen = False
+        config.display.width, config.display.height = 320, 240
+        assert self._display(config)._display_mode() == ((320, 240), 0)
+
+    def test_a_half_specified_size_is_treated_as_native(self, config, monkeypatch):
+        # Only one of the two set is not a size; it must not slip through into
+        # SCALED with a zero dimension.
+        monkeypatch.setenv("SDL_VIDEODRIVER", "dummy")
+        config.display.width, config.display.height = 480, 0
+        d = self._display(config)
+        size, flags = d._display_mode()
+        assert size == (0, 0)
+        assert not flags & d._pygame.SCALED

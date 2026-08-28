@@ -129,11 +129,26 @@ class PygameDisplay:
         pinned = os.environ.get("SDL_VIDEODRIVER")
         return [pinned] if pinned else list(DRIVER_PREFERENCE)
 
+    def _display_mode(self) -> tuple[tuple[int, int], int]:
+        """The ``size, flags`` pair to hand ``set_mode``.
+
+        Width and height of 0 mean "whatever the display already is". That cannot
+        be combined with ``SCALED`` -- SDL rejects it outright with "Cannot set 0
+        sized SCALED display mode" -- so scaling is only requested when there is a
+        real size to scale from.
+        """
+        pygame = self._pygame
+        display = self.config.display
+        explicit = bool(display.width and display.height)
+        size = (display.width, display.height) if explicit else (0, 0)
+        if not display.fullscreen:
+            return size, 0
+        return size, (pygame.FULLSCREEN | pygame.SCALED if explicit else pygame.FULLSCREEN)
+
     def _open_window(self) -> None:
         pygame = self._pygame
         display = self.config.display
-        size = (display.width, display.height) if display.width and display.height else (0, 0)
-        flags = pygame.FULLSCREEN | pygame.SCALED if display.fullscreen else 0
+        size, flags = self._display_mode()
 
         failures: list[str] = []
         for driver in self._driver_candidates():
@@ -152,16 +167,19 @@ class PygameDisplay:
             self._clock = pygame.time.Clock()
             return
 
-        raise RuntimeError(
-            "could not open a display.\n  "
-            + "\n  ".join(failures)
-            + '\n\n"kmsdrm not available" almost always means a desktop compositor already'
-            "\nholds the DRM device -- SDL cannot take it while wayfire, labwc or Xorg has"
-            "\nit. Either boot to the console (sudo raspi-config -> System Options ->"
-            "\nBoot / Auto Login -> Console Autologin), which is what the systemd unit"
-            "\nexpects, or run from inside the desktop session so the wayland driver can"
-            "\nbe used. Over SSH into a desktop session, neither works."
-        )
+        # Only offer the compositor explanation when a driver actually reported
+        # itself unavailable; for any other failure it is a red herring.
+        hint = ""
+        if any("not available" in failure for failure in failures):
+            hint = (
+                '\n\n"kmsdrm not available" almost always means a desktop compositor already'
+                "\nholds the DRM device -- SDL cannot take it while wayfire, labwc or Xorg has"
+                "\nit. Either boot to the console (sudo raspi-config -> System Options ->"
+                "\nBoot / Auto Login -> Console Autologin), which is what the systemd unit"
+                "\nexpects, or run from inside the desktop session so the wayland driver can"
+                "\nbe used. Over SSH into a desktop session, neither works."
+            )
+        raise RuntimeError("could not open a display.\n  " + "\n  ".join(failures) + hint)
 
     def font(self, size: int) -> Any:
         """Cached font at ``size``, honouring ``display.font_path`` when set."""

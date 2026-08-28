@@ -26,6 +26,11 @@ from nowspinning.state import NowPlaying, StateStore
 
 log = logging.getLogger(__name__)
 
+#: Tried in order when SDL_VIDEODRIVER is not pinned. kmsdrm first because the
+#: intended deployment is a Pi with no desktop; the rest let the same command
+#: work on a desktop image.
+DRIVER_PREFERENCE: tuple[str, ...] = ("kmsdrm", "wayland", "x11")
+
 Color = tuple[int, int, int]
 
 #: Fraction of the platter diameter taken up by the paper label.
@@ -96,9 +101,6 @@ class PygameDisplay:
     # -- setup -----------------------------------------------------------
 
     def _init_pygame(self) -> Any:
-        # A framebuffer console has no windowing system; without this SDL refuses to
-        # start on a headless Pi. An existing choice from the environment wins.
-        os.environ.setdefault("SDL_VIDEODRIVER", "kmsdrm")
         # An SPI panel (a 3.5" ILI9486 hat, say) is its own DRM device, usually
         # card1, and SDL takes card0 unless told otherwise -- which on a Pi with
         # HDMI present means rendering to the port nobody is looking at.
@@ -116,15 +118,50 @@ class PygameDisplay:
         pygame.font.init()
         return pygame
 
+    def _driver_candidates(self) -> list[str]:
+        """SDL video drivers to try, in order.
+
+        A pinned ``SDL_VIDEODRIVER`` is obeyed exactly -- the systemd unit sets it,
+        and so do the tests. Otherwise prefer the framebuffer console, then the two
+        desktop backends, so the same command works on Pi OS Lite and on a desktop
+        image without anyone having to know which is which.
+        """
+        pinned = os.environ.get("SDL_VIDEODRIVER")
+        return [pinned] if pinned else list(DRIVER_PREFERENCE)
+
     def _open_window(self) -> None:
         pygame = self._pygame
         display = self.config.display
         size = (display.width, display.height) if display.width and display.height else (0, 0)
         flags = pygame.FULLSCREEN | pygame.SCALED if display.fullscreen else 0
-        self._screen = pygame.display.set_mode(size, flags)
-        pygame.display.set_caption("now-spinning")
-        pygame.mouse.set_visible(display.show_cursor)
-        self._clock = pygame.time.Clock()
+
+        failures: list[str] = []
+        for driver in self._driver_candidates():
+            os.environ["SDL_VIDEODRIVER"] = driver
+            try:
+                # Re-init: the driver is chosen when the display subsystem starts,
+                # so it has to be torn down before another one can be tried.
+                pygame.display.quit()
+                pygame.display.init()
+                self._screen = pygame.display.set_mode(size, flags)
+            except pygame.error as exc:
+                failures.append(f"{driver}: {exc}")
+                continue
+            pygame.display.set_caption("now-spinning")
+            pygame.mouse.set_visible(display.show_cursor)
+            self._clock = pygame.time.Clock()
+            return
+
+        raise RuntimeError(
+            "could not open a display.\n  "
+            + "\n  ".join(failures)
+            + '\n\n"kmsdrm not available" almost always means a desktop compositor already'
+            "\nholds the DRM device -- SDL cannot take it while wayfire, labwc or Xorg has"
+            "\nit. Either boot to the console (sudo raspi-config -> System Options ->"
+            "\nBoot / Auto Login -> Console Autologin), which is what the systemd unit"
+            "\nexpects, or run from inside the desktop session so the wayland driver can"
+            "\nbe used. Over SSH into a desktop session, neither works."
+        )
 
     def font(self, size: int) -> Any:
         """Cached font at ``size``, honouring ``display.font_path`` when set."""

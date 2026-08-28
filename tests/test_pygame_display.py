@@ -199,3 +199,47 @@ class TestDeviceIndex:
     def test_a_negative_card_is_rejected(self):
         with pytest.raises(ValidationError):
             DisplayConfig(device_index=-1)
+
+
+class TestVideoDriverSelection:
+    """`kmsdrm not available` should not surface as a bare traceback."""
+
+    def test_a_pinned_driver_is_obeyed_exactly(self, config, monkeypatch):
+        # The systemd unit pins kmsdrm on purpose; falling back to x11 there
+        # would silently render nowhere anyone can see.
+        monkeypatch.setenv("SDL_VIDEODRIVER", "kmsdrm")
+        assert PygameDisplay(config, StateStore())._driver_candidates() == ["kmsdrm"]
+
+    def test_unpinned_falls_back_through_the_desktop_backends(self, config, monkeypatch):
+        monkeypatch.delenv("SDL_VIDEODRIVER", raising=False)
+        assert PygameDisplay(config, StateStore())._driver_candidates() == [
+            "kmsdrm",
+            "wayland",
+            "x11",
+        ]
+
+    def test_kmsdrm_is_tried_first(self, config, monkeypatch):
+        monkeypatch.delenv("SDL_VIDEODRIVER", raising=False)
+        assert PygameDisplay(config, StateStore())._driver_candidates()[0] == "kmsdrm"
+
+    def test_failure_explains_the_compositor_problem(self, config, monkeypatch):
+        monkeypatch.setenv("SDL_VIDEODRIVER", "no-such-driver")
+        config.display.fullscreen = False
+        config.display.width, config.display.height = 64, 64
+        d = PygameDisplay(config, StateStore())
+        d._pygame = d._init_pygame()
+        with pytest.raises(RuntimeError) as excinfo:
+            d._open_window()
+        message = str(excinfo.value)
+        assert "no-such-driver" in message  # says what it actually tried
+        assert "compositor" in message
+        assert "raspi-config" in message  # and what to do about it
+
+    def test_a_working_driver_still_opens(self, config, monkeypatch):
+        monkeypatch.setenv("SDL_VIDEODRIVER", "dummy")
+        config.display.fullscreen = False
+        config.display.width, config.display.height = 64, 64
+        d = PygameDisplay(config, StateStore())
+        d._pygame = d._init_pygame()
+        d._open_window()
+        assert d._screen.get_size() == (64, 64)

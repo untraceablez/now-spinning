@@ -222,6 +222,14 @@ track than on a fade-in.
 **Matches, but the screen stays blank.** Check the backend: `--backend both` and
 load `http://<pi>:8000` to see whether the problem is recognition or rendering.
 
+**`pygame.error: kmsdrm not available`.** A desktop compositor (wayfire, labwc,
+Xorg) already holds the DRM device, and SDL cannot take it while that is running.
+This is the normal state on a Raspberry Pi OS *desktop* image, and SSHing in does
+not change it. Boot to the console instead — `sudo raspi-config` → System Options
+→ Boot / Auto Login → **Console Autologin** — which is what the systemd unit
+expects. Running from inside the desktop session works too: the display falls
+back to the `wayland` driver when `SDL_VIDEODRIVER` is not pinned.
+
 **Black screen on a Pi with no desktop.** The service user needs `video` group
 membership and access to `/dev/dri/card*`.
 

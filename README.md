@@ -9,8 +9,10 @@ attached display with the track, artist, and album.
 
 ![The pygame display showing a spinning record with the track, artist, and album](docs/screenshot.png)
 
-The record turns while music is playing, and the label shows the cover art once it
-has been fetched.
+Two styles, set with `display.style`. **`sleeve`** (the default, shown above) puts
+the cover in a record sleeve with the disc pulled halfway out; **`record`** puts it
+on the label of a turning platter. Both fall back to a placeholder until the cover
+art has been fetched.
 
 ## How it works
 
@@ -126,6 +128,7 @@ The keys worth knowing:
 | `recognizer.recheck_interval_seconds` | `45.0` | Cadence for catching track changes |
 | `recognizer.linger_seconds` | `90.0` | How long the last track survives silence |
 | `display.backend` | `pygame` | `pygame`, `web`, `both`, or `none` |
+| `display.style` | `sleeve` | `sleeve` (cover in a record sleeve) or `record` (cover on a spinning platter) |
 | `display.rpm` | `33.333` | Rotation speed — `45.0` for a single |
 | `display.device_index` | system default | Which `/dev/dri/card` to draw on; needed for a GPIO/SPI panel, usually `1` |
 

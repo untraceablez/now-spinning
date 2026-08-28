@@ -9,6 +9,7 @@ with no keyboard attached.
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 import pytest
 
@@ -20,6 +21,7 @@ from nowspinning.config import Config, DisplayConfig
 from nowspinning.recognize.base import Track
 from nowspinning.state import NowPlaying, StateStore
 from nowspinning.ui.pygame_display import (
+    ASSETS,
     PygameDisplay,
     Theme,
     mix,
@@ -297,3 +299,87 @@ class TestFullscreenSizing:
         size, flags = d._display_mode()
         assert size == (0, 0)
         assert not flags & d._pygame.SCALED
+
+
+class TestSleeveStyle:
+    """Cover art in a record sleeve, after the Bowtie 'Massive Vinyl' theme."""
+
+    def _display(self, config, size=(480, 320)):
+        config.display.width, config.display.height = size
+        config.display.fullscreen = False
+        d = PygameDisplay(config, StateStore())
+        d._pygame = d._init_pygame()
+        d._open_window()
+        return d
+
+    def test_sleeve_is_the_default_style(self, config):
+        assert config.display.style == "sleeve"
+
+    def test_the_assets_are_installed_beside_the_module(self):
+        # These ship in the wheel; a packaging slip would only show at runtime
+        # on someone else's machine, which is the worst place to find it.
+        assert (ASSETS / "sleeve.png").is_file()
+        assert (ASSETS / "sleeve-noart.png").is_file()
+
+    def test_the_art_window_matches_the_original_theme(self, config):
+        # At the asset's native size the window must land exactly where the
+        # theme's stylesheet put it: 355x355 at (27, 14) in a 453x387 sheet.
+        d = PygameDisplay(config, StateStore())
+        d._pygame = d._init_pygame()
+        rect = d._pygame.Rect(0, 0, 453, 387)
+        window = d._art_window(rect)
+        assert (window.x, window.y) == (27, 14)
+        assert (window.width, window.height) == (355, 355)
+
+    def test_the_art_window_moves_with_the_sleeve(self, config):
+        d = PygameDisplay(config, StateStore())
+        d._pygame = d._init_pygame()
+        at_origin = d._art_window(d._pygame.Rect(0, 0, 453, 387))
+        shifted = d._art_window(d._pygame.Rect(100, 50, 453, 387))
+        assert (shifted.x - at_origin.x, shifted.y - at_origin.y) == (100, 50)
+        assert shifted.size == at_origin.size
+
+    def test_the_cover_stays_inside_the_sleeve(self, config):
+        d = PygameDisplay(config, StateStore())
+        d._pygame = d._init_pygame()
+        sleeve = d._pygame.Rect(0, 0, 453, 387)
+        assert sleeve.contains(d._art_window(sleeve))
+
+    def test_it_draws_with_no_artwork(self, config):
+        d = self._display(config)
+        d.store.update(status="playing", track=TRACK)
+        d.draw(d.store.snapshot())  # placeholder path
+
+    def test_it_draws_with_artwork(self, config, tmp_path):
+        cover = tmp_path / "cover.png"
+        surface = self._display(config)._pygame.Surface((300, 300))
+        surface.fill((10, 120, 200))
+        self._display(config)._pygame.image.save(surface, str(cover))
+        d = self._display(config)
+        d.store.update(status="playing", track=TRACK, artwork_path=cover)
+        d.draw(d.store.snapshot())
+
+    def test_a_missing_asset_falls_back_to_the_record(self, config, monkeypatch):
+        # Rendering nothing at all would be worse than the other style.
+        import nowspinning.ui.pygame_display as mod
+
+        monkeypatch.setattr(mod, "ASSETS", Path("/nonexistent"))
+        d = self._display(config)
+        d.store.update(status="playing", track=TRACK)
+        d.draw(d.store.snapshot())
+
+    def test_the_record_style_still_works(self, config):
+        config.display.style = "record"
+        d = self._display(config)
+        d.store.update(status="playing", track=TRACK)
+        d.draw(d.store.snapshot())
+
+    def test_an_unknown_style_is_rejected(self):
+        with pytest.raises(ValidationError):
+            DisplayConfig(style="hologram")
+
+    @pytest.mark.parametrize("size", [(480, 320), (320, 480), (1280, 720), (240, 240)])
+    def test_it_draws_at_any_panel_size(self, config, size):
+        d = self._display(config, size)
+        d.store.update(status="playing", track=TRACK)
+        d.draw(d.store.snapshot())

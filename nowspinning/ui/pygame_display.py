@@ -1,13 +1,15 @@
-"""Full-screen spinning-record renderer.
+"""Full-screen now-playing renderer.
 
 Runs on the framebuffer through KMS/DRM, so a Raspberry Pi OS Lite install with no
 desktop environment can boot straight into this. It must own the main thread --
 SDL requires it -- so the engine runs on an event loop in a background thread and
 this side only ever reads snapshots.
 
-Only the label rotates, plus a few groove-gap arcs drawn procedurally. Rotating the
-whole platter every frame is what a real record looks like, but it is also the one
-thing guaranteed to cost more than a Pi Zero has to spare.
+Two styles. ``sleeve`` composites the cover behind a sleeve image and is static,
+so it costs nothing per frame once the cover is cached. ``record`` rotates only the
+label plus a few groove-gap arcs: turning the whole platter every frame is what a
+real record looks like, and also the one thing guaranteed to cost more than a Pi
+Zero has to spare.
 """
 
 from __future__ import annotations
@@ -30,6 +32,14 @@ log = logging.getLogger(__name__)
 #: intended deployment is a Pi with no desktop; the rest let the same command
 #: work on a desktop image.
 DRIVER_PREFERENCE: tuple[str, ...] = ("kmsdrm", "wayland", "x11")
+
+ASSETS = Path(__file__).with_name("assets")
+
+#: Where the cover sits inside sleeve.png, as fractions of that image. Taken from
+#: the original theme's stylesheet: a 355x355 window at (27, 14) in a 453x387
+#: sheet, which is why the artwork reads as square despite the sleeve being taller
+#: than it is wide.
+ART_WINDOW = (27 / 453, 14 / 387, 355 / 453, 355 / 387)
 
 Color = tuple[int, int, int]
 
@@ -95,6 +105,8 @@ class PygameDisplay:
         self._clock: Any = None
         self._platter: Any = None
         self._label_cache: dict[str, Any] = {}
+        self._sleeve_cache: dict[tuple[int, int], Any] = {}
+        self._cover_cache: dict[tuple[str, int, int], Any] = {}
         self._fonts: dict[int, Any] = {}
         self._platter_size = 0
 
@@ -253,8 +265,87 @@ class PygameDisplay:
             # middle of the record rather than floating above it.
             text_rect = (text_left, 0, width - text_left - int(width * 0.06), height)
 
-        self._draw_record(centre, diameter, state)
+        if self.config.display.style == "sleeve":
+            # The sleeve is wider than it is tall, so it gets its own box rather
+            # than the platter's diameter, which would leave it floating in a
+            # square and wasting most of the panel's height.
+            if stacked:
+                box_size = (int(width * 0.86), int(height * 0.54))
+            else:
+                box_size = (int(width * 0.52), int(height * 0.92))
+            box = self._pygame.Rect((0, 0), box_size)
+            box.center = centre
+            self._draw_sleeve(box, state)
+        else:
+            self._draw_record(centre, diameter, state)
         self._draw_panel(text_rect, state, centred=stacked)
+
+    # -- sleeve ----------------------------------------------------------
+
+    def _draw_sleeve(self, box: Any, state: NowPlaying) -> None:
+        """Cover art in a record sleeve, disc protruding, after the Bowtie theme."""
+        sleeve = self._get_sleeve(box.width, box.height)
+        if sleeve is None:  # asset missing; fall back rather than show nothing
+            self._draw_record(box.center, min(box.width, box.height), state)
+            return
+        rect = sleeve.get_rect(center=box.center)
+        window = self._art_window(rect)
+        cover = self._get_cover(window.width, window.height, state)
+        if cover is not None:
+            self._screen.blit(cover, window)
+        self._screen.blit(sleeve, rect)
+
+    @staticmethod
+    def _art_window(sleeve_rect: Any) -> Any:
+        """The cover's rect inside a drawn sleeve."""
+        fx, fy, fw, fh = ART_WINDOW
+        rect = sleeve_rect.copy()
+        rect.x = sleeve_rect.x + round(sleeve_rect.width * fx)
+        rect.y = sleeve_rect.y + round(sleeve_rect.height * fy)
+        rect.width = round(sleeve_rect.width * fw)
+        rect.height = round(sleeve_rect.height * fh)
+        return rect
+
+    def _get_sleeve(self, max_width: int, max_height: int) -> Any:
+        """sleeve.png scaled to fit the box, keeping its proportions."""
+        key = (max_width, max_height)
+        cached = self._sleeve_cache.get(key)
+        if cached is not None:
+            return cached
+        pygame = self._pygame
+        try:
+            image = pygame.image.load(str(ASSETS / "sleeve.png"))
+        except Exception as exc:
+            log.warning("could not load the sleeve asset: %s", exc)
+            return None
+        with contextlib.suppress(pygame.error):
+            image = image.convert_alpha()
+        scale = min(max_width / image.get_width(), max_height / image.get_height())
+        size = (max(1, int(image.get_width() * scale)), max(1, int(image.get_height() * scale)))
+        scaled = pygame.transform.smoothscale(image, size)
+        self._sleeve_cache[key] = scaled
+        return scaled
+
+    def _get_cover(self, width: int, height: int, state: NowPlaying) -> Any:
+        """The cover to sit behind the sleeve, or the theme's placeholder."""
+        path = state.artwork_path
+        key = (str(path) if path else "", width, height)
+        cached = self._cover_cache.get(key)
+        if cached is not None:
+            return cached
+        pygame = self._pygame
+        source = Path(path) if path else ASSETS / "sleeve-noart.png"
+        try:
+            image = pygame.image.load(str(source))
+        except Exception as exc:
+            log.warning("could not load cover %s: %s", source, exc)
+            return None
+        with contextlib.suppress(pygame.error):
+            image = image.convert_alpha()
+        scaled = pygame.transform.smoothscale(image, (max(1, width), max(1, height)))
+        # One entry is enough: the cover only changes when the track does.
+        self._cover_cache = {key: scaled}
+        return scaled
 
     def _draw_record(self, centre: tuple[int, int], diameter: int, state: NowPlaying) -> None:
         pygame = self._pygame

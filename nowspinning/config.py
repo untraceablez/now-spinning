@@ -131,6 +131,13 @@ class DisplayConfig(_Base):
     """Look and feel of the record animation."""
 
     backend: Literal["pygame", "web", "both", "none"] = "pygame"
+    style: Literal["sleeve", "record"] = Field(
+        default="sleeve",
+        description=(
+            "'sleeve' shows the cover in a record sleeve with the disc peeking out; "
+            "'record' shows the cover on a spinning platter."
+        ),
+    )
     fullscreen: bool = True
     width: int = Field(default=0, ge=0, description="0 = use the display's native size.")
     height: int = Field(default=0, ge=0)

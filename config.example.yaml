@@ -73,6 +73,9 @@ display:
   # both    = run both renderers off the same state
   # none    = headless (useful with the web backend disabled, or for logging only)
   backend: pygame
+  # sleeve = cover art in a record sleeve, disc pulled halfway out
+  # record = cover art on the label of a turning platter
+  style: sleeve
   fullscreen: true
   # 0 x 0 uses the display's native resolution.
   width: 0

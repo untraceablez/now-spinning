@@ -141,7 +141,7 @@ mirroring trick is also dead on Pi 5 — it used DispmanX, which that board remo
 Use the in-tree overlay's DRM mode instead. In `/boot/firmware/config.txt`:
 
 ```
-dtoverlay=piscreen,drm,speed=24000000,fps=30
+dtoverlay=piscreen,drm,speed=16000000,fps=30
 ```
 
 The `drm` flag is the important part: it binds the KMS/DRM `ili9486` driver
@@ -170,6 +170,14 @@ so `rotate=90` turns the panel portrait, which is the opposite of what the
 parameter name suggests. Add it only if you actually want 320×480. (The
 parameter reads the other way round for the legacy fbtft driver, which is where
 the confusion comes from.)
+
+**If the colours are wrong, suspect `speed` before anything else.** These panels
+are driven over SPI with no error checking, so a clock the wiring cannot sustain
+corrupts pixel data in transit. In RGB565 a few flipped bits move red into the
+blue field, which looks convincingly like an RGB/BGR mismatch but is really
+signal integrity. The overlay's own default is 24 MHz and not every board or
+ribbon manages it — drop to `speed=16000000`, and lower again if needed. Suspect
+a genuine colour-order problem only once a slower clock has been ruled out.
 
 ## Running as a service
 

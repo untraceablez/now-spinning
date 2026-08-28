@@ -141,7 +141,7 @@ mirroring trick is also dead on Pi 5 — it used DispmanX, which that board remo
 Use the in-tree overlay's DRM mode instead. In `/boot/firmware/config.txt`:
 
 ```
-dtoverlay=piscreen,drm,rotate=90,speed=24000000,fps=30
+dtoverlay=piscreen,drm,speed=24000000,fps=30
 ```
 
 The `drm` flag is the important part: it binds the KMS/DRM `ili9486` driver
@@ -150,12 +150,26 @@ Then point this program at that card:
 
 ```yaml
 display:
-  device_index: 1     # check `ls /dev/dri/` -- HDMI is card0
+  device_index: 1
   width: 480
   height: 320
 ```
 
-`rotate=90` gives 480×320 landscape; drop it for 320×480 portrait.
+There is usually more than one card (`vc4` for HDMI, `v3d` for the GPU, and the
+panel), so check which index is the panel rather than assuming:
+
+```bash
+for c in /sys/class/drm/card?; do
+  printf '%s -> %s\n' "$(basename "$c")" "$(basename "$(readlink -f "$c/device/driver")")"
+done
+```
+
+**Do not add `rotate=90`.** The DRM driver's native mode is already 480×320
+landscape, and `mipi_dbi_rotate_mode()` *swaps* width and height for 90 and 270 —
+so `rotate=90` turns the panel portrait, which is the opposite of what the
+parameter name suggests. Add it only if you actually want 320×480. (The
+parameter reads the other way round for the legacy fbtft driver, which is where
+the confusion comes from.)
 
 ## Running as a service
 

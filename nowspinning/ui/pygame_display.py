@@ -50,6 +50,15 @@ ART_WINDOW = (27 / 453, 14 / 387, 355 / 453, 355 / 387)
 DISC_CENTRE = (274.2 / 453, 194.0 / 387)
 DISC_RADIUS = 172.6 / 453
 
+#: The composition to centre and scale by: the cover, plus the record when it is
+#: drawn. Deliberately not the image's alpha bounds -- the jacket's shadow
+#: reaches 23px to the left of the cover and none to the right, so centring on
+#: ink puts the cover visibly right of middle. The eye centres on the artwork.
+COVER_LEFT = ART_WINDOW[0]
+COVER_TOP = ART_WINDOW[1]
+COVER_BOTTOM = ART_WINDOW[1] + ART_WINDOW[3]
+DISC_EDGE = DISC_CENTRE[0] + DISC_RADIUS
+
 #: Where the jacket ends and the record begins, as a fraction of sleeve.png.
 #: Everything left of it is jacket, everything right is record, which is what
 #: lets the two be drawn -- or not drawn -- independently. It is also the left
@@ -439,36 +448,50 @@ class PygameDisplay:
         Returns the rect the sleeve was drawn into, so the caller can lay text out
         beside it, or ``None`` if the asset is missing and the record was drawn.
         """
+        pygame = self._pygame
         display = self.config.display
         # With the record hidden there is nothing to the right of the jacket, so
-        # scale the jacket to the box instead of the whole image -- otherwise the
-        # cover shrinks to leave room for something that is not drawn.
-        fraction = 1.0 if display.show_vinyl else SLEEVE_RIGHT
-        sleeve = self._get_sleeve(box.width, box.height, fraction)
+        # the jacket alone is what has to fit the box -- otherwise the cover
+        # shrinks to leave room for something that is not drawn.
+        # The cover is clipped where the jacket ends, so with the record hidden
+        # that is also where the composition ends.
+        right = DISC_EDGE if display.show_vinyl else SLEEVE_RIGHT
+        sleeve = self._get_sleeve(box.width, box.height, right)
         if sleeve is None:  # asset missing; fall back rather than show nothing
             self._draw_record(box.center, min(box.width, box.height), state)
             return None
 
-        visible_width = max(1, round(sleeve.get_width() * fraction))
+        width, height = sleeve.get_size()
+        left_px, right_px = COVER_LEFT * width, right * width
+        top_px, bottom_px = COVER_TOP * height, COVER_BOTTOM * height
         rect = sleeve.get_rect()
-        rect.x = box.centerx - visible_width // 2
-        rect.y = box.centery - sleeve.get_height() // 2
+        rect.x = round(box.centerx - (left_px + right_px) / 2)
+        rect.y = round(box.centery - (top_px + bottom_px) / 2)
 
+        split = rect.x + round(width * SLEEVE_RIGHT)
         window = self._art_window(rect)
         cover = self._get_cover(window.width, window.height, state)
         if cover is not None:
-            self._screen.blit(cover, window)
+            # Clipped to where the jacket ends. The cover window reaches five
+            # pixels further right than the jacket does, and with the record
+            # hidden nothing covers that strip -- it shows as a sliver of
+            # unglossed artwork down the edge.
+            self._blit_clipped(cover, window, window.left, split)
 
-        split = rect.x + round(rect.width * SLEEVE_RIGHT)
         if display.show_gloss:
             self._blit_clipped(sleeve, rect, rect.left, split)
         if display.show_vinyl:
             self._blit_clipped(sleeve, rect, split, rect.right)
             self._draw_disc_motion(rect)
 
-        # Report only what was drawn, so the text column sits beside the artwork
-        # rather than beside a record that is not there.
-        return self._pygame.Rect(rect.x, rect.y, visible_width, rect.height)
+        # Report the ink, so the text column sits beside the artwork rather than
+        # beside the image's transparent margin.
+        return pygame.Rect(
+            round(rect.x + left_px),
+            round(rect.y + top_px),
+            max(1, round(right_px - left_px)),
+            max(1, round(bottom_px - top_px)),
+        )
 
     def _blit_clipped(self, surface: Any, rect: Any, left: int, right: int) -> None:
         """Blit ``surface`` at ``rect``, showing only the columns in [left, right)."""
@@ -561,13 +584,15 @@ class PygameDisplay:
         rect.height = round(sleeve_rect.height * fh)
         return rect
 
-    def _get_sleeve(self, max_width: int, max_height: int, fraction: float = 1.0) -> Any:
-        """sleeve.png scaled so ``fraction`` of its width fits the box.
+    def _get_sleeve(self, max_width: int, max_height: int, right: float = DISC_EDGE) -> Any:
+        """sleeve.png scaled so the composition, out to ``right``, fits the box.
 
-        ``fraction`` is 1.0 when the record is drawn and the jacket's share when
-        it is not, so the cover fills the space either way.
+        ``right`` is the record's outer edge when it is drawn and the jacket's
+        when it is not, so the cover fills the space either way. Measured from
+        the cover rather than the image, whose padding and shadow would
+        otherwise eat into the box and pull the artwork off centre.
         """
-        key = (max_width, max_height, round(fraction, 3))
+        key = (max_width, max_height, round(right, 4))
         cached = self._sleeve_cache.get(key)
         if cached is not None:
             return cached
@@ -579,7 +604,9 @@ class PygameDisplay:
             return None
         with contextlib.suppress(pygame.error):
             image = image.convert_alpha()
-        scale = min(max_width / (image.get_width() * fraction), max_height / image.get_height())
+        span_width = image.get_width() * (right - COVER_LEFT)
+        span_height = image.get_height() * (COVER_BOTTOM - COVER_TOP)
+        scale = min(max_width / span_width, max_height / span_height)
         size = (max(1, int(image.get_width() * scale)), max(1, int(image.get_height() * scale)))
         scaled = pygame.transform.smoothscale(image, size)
         self._sleeve_cache[key] = scaled

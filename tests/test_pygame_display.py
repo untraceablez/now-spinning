@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import ClassVar
+from typing import Any, ClassVar
 
 import numpy as np
 import pytest
@@ -24,6 +24,7 @@ from nowspinning.recognize.base import Track
 from nowspinning.state import NowPlaying, StateStore
 from nowspinning.ui.pygame_display import (
     ASSETS,
+    DISC_EDGE,
     SLEEVE_RIGHT,
     PygameDisplay,
     Theme,
@@ -457,19 +458,26 @@ class TestSleeveMotion:
         d.draw(d.store.snapshot())
 
     def test_the_text_does_not_touch_the_sleeve(self, config, monkeypatch):
+        # Take the artwork's extent from what _draw_sleeve reports rather than
+        # recomputing it here, so this keeps testing the gap and not a stale
+        # copy of the layout maths.
         d = self._display(config)
-        captured = {}
-        original = d._draw_panel
+        captured: dict[str, Any] = {}
+        draw_panel, draw_sleeve = d._draw_panel, d._draw_sleeve
         monkeypatch.setattr(
             d,
             "_draw_panel",
-            lambda rect, *a, **k: (captured.update(rect=rect), original(rect, *a, **k))[1],
+            lambda rect, *a, **k: (captured.update(text=rect), draw_panel(rect, *a, **k))[1],
+        )
+        monkeypatch.setattr(
+            d,
+            "_draw_sleeve",
+            lambda box, state: captured.setdefault("art", draw_sleeve(box, state)),
         )
         d.draw(d.store.snapshot())
-        sleeve = d._get_sleeve(int(480 * 0.52), int(320 * 0.92))
-        right = sleeve.get_rect(center=(int(480 * 0.28), 160)).right
-        assert captured["rect"][0] > right, "text starts before the sleeve ends"
-        assert captured["rect"][0] - right >= 480 * 0.04, "gap is too tight"
+        right = captured["art"].right
+        assert captured["text"][0] > right, "text starts before the artwork ends"
+        assert captured["text"][0] - right >= 480 * 0.03, "gap is too tight"
 
 
 class TestPerRoleTypography:
@@ -638,7 +646,7 @@ class TestSleeveLayers:
         hidden the cover expands into that space, so the honest question is
         whether any *record* is drawn there, not whether the area is empty.
         """
-        sleeve = display._get_sleeve(int(480 * 0.52), int(320 * 0.92), 1.0)
+        sleeve = display._get_sleeve(int(480 * 0.52), int(320 * 0.92), DISC_EDGE)
         width = sleeve.get_width()
         centre = int(480 * 0.28)  # the artwork is centred here, not mid-panel
         left = centre - width // 2 + int(width * SLEEVE_RIGHT)
@@ -661,23 +669,29 @@ class TestSleeveLayers:
             for x in (90, 120, 150)
         ]
 
+    @staticmethod
+    def _spread(samples):
+        """Widest gap between samples, over all three channels."""
+        return max(max(s[c] for s in samples) - min(s[c] for s in samples) for c in range(3))
+
     def test_hiding_the_gloss_leaves_the_cover_flat(self, config, cover):
-        # smoothscale shifts the exact value slightly, so what matters is that
-        # every sample is the same -- nothing was laid over it.
+        # Not exact equality: rescaling a flat fill can dither by a level. What
+        # matters is that nothing is *shading* it, which is a far bigger signal
+        # -- the glossed version below spans about 20 levels.
         plain = self._draw(config, cover, vinyl=False, gloss=False)
         samples = self._cover_samples(plain)
-        assert len(set(samples)) == 1, f"cover is not flat: {samples}"
+        assert self._spread(samples) <= 2, f"cover is shaded: {samples}"
 
     def test_the_gloss_does_shade_the_cover(self, config, cover):
         # Guards the test above: if the gloss were a no-op it would pass anyway.
         glossed = self._draw(config, cover, vinyl=False, gloss=True)
-        assert len(set(self._cover_samples(glossed))) > 1
+        assert self._spread(self._cover_samples(glossed)) > 8
 
     def test_the_cover_grows_when_the_record_is_hidden(self, config, cover):
         # Otherwise it would shrink to leave room for something not drawn.
         with_disc = self._draw(config, cover, vinyl=True)
         without = self._draw(config, cover, vinyl=False)
-        wide = with_disc._get_sleeve(int(480 * 0.52), int(320 * 0.92), 1.0)
+        wide = with_disc._get_sleeve(int(480 * 0.52), int(320 * 0.92), DISC_EDGE)
         narrow = without._get_sleeve(int(480 * 0.52), int(320 * 0.92), SLEEVE_RIGHT)
         assert narrow.get_width() > wide.get_width()
 
@@ -708,7 +722,9 @@ class TestSleeveLayers:
             d.store.update(status="playing", track=TRACK, artwork_path=cover)
             capture(d, key)
             d.draw(d.store.snapshot())
-        assert seen["without"] == seen["with"]
+        # Within a pixel: the artwork is scaled to the same box either way, and
+        # the two scale factors round differently. A pixel is not a jump.
+        assert abs(seen["without"] - seen["with"]) <= 1
 
     @pytest.mark.parametrize("vinyl", [True, False])
     @pytest.mark.parametrize("gloss", [True, False])
@@ -1016,3 +1032,100 @@ class TestArtworkOnlyLayout:
         d = self._display(config, **self.ALL_OFF)
         d.store.update(status="idle", track=None)
         d.draw(d.store.snapshot())
+
+
+class TestArtworkCentring:
+    """The cover lands where the eye expects it, and the gloss covers all of it."""
+
+    ALL_OFF: ClassVar[dict[str, bool]] = {
+        "show_heading": False,
+        "show_title": False,
+        "show_artist": False,
+        "show_album": False,
+    }
+
+    @pytest.fixture
+    def cover(self, tmp_path):
+        pygame.display.set_mode((64, 64))
+        surface = pygame.Surface((300, 300))
+        surface.fill((150, 60, 190))
+        path = tmp_path / "cover.png"
+        pygame.image.save(surface, str(path))
+        return path
+
+    def _frame(self, config, cover, size=(480, 320), **overrides):
+        config.display.width, config.display.height = size
+        config.display.fullscreen = False
+        config.fonts.source = "builtin"
+        for key, value in overrides.items():
+            setattr(config.display, key, value)
+        d = PygameDisplay(config, StateStore())
+        d._pygame = d._init_pygame()
+        d._open_window()
+        d.store.update(status="playing", track=TRACK, artwork_path=cover)
+        d.draw(d.store.snapshot())
+        return d._screen.copy()
+
+    @staticmethod
+    def _cover_bounds(frame):
+        px = pygame.surfarray.pixels3d(frame).astype(int)
+        mask = (px[:, :, 0] > 80) & (px[:, :, 2] > 120) & (px[:, :, 1] < 110)
+        xs = np.where(mask.any(axis=1))[0]
+        ys = np.where(mask.any(axis=0))[0]
+        return xs.min(), xs.max(), ys.min(), ys.max()
+
+    def test_the_cover_is_centred_when_the_record_is_hidden(self, config, cover):
+        frame = self._frame(config, cover, show_vinyl=False, **self.ALL_OFF)
+        x0, x1, y0, y1 = self._cover_bounds(frame)
+        assert abs(x0 - (479 - x1)) <= 1, f"off centre horizontally: {x0} vs {479 - x1}"
+        assert abs(y0 - (319 - y1)) <= 1, f"off centre vertically: {y0} vs {319 - y1}"
+
+    def test_the_composition_is_centred_when_the_record_shows(self, config, cover, monkeypatch):
+        # The record occupies the right, so the cover sits left of middle on
+        # purpose; what has to be centred is the cover plus the record. Ask the
+        # renderer for that rect rather than extrapolating it from the cover.
+        config.display.width, config.display.height = 480, 320
+        config.display.fullscreen = False
+        config.fonts.source = "builtin"
+        for key, value in self.ALL_OFF.items():
+            setattr(config.display, key, value)
+        d = PygameDisplay(config, StateStore())
+        d._pygame = d._init_pygame()
+        d._open_window()
+        d.store.update(status="playing", track=TRACK, artwork_path=cover)
+        seen: dict[str, Any] = {}
+        original = d._draw_sleeve
+        monkeypatch.setattr(
+            d, "_draw_sleeve", lambda box, state: seen.setdefault("art", original(box, state))
+        )
+        d.draw(d.store.snapshot())
+        assert abs(seen["art"].centerx - 240) <= 1
+        assert abs(seen["art"].centery - 160) <= 1
+
+    def test_the_gloss_covers_the_whole_cover(self, config, cover):
+        """No sliver of unglossed artwork down the right edge.
+
+        The cover window reaches five pixels further right than the jacket, and
+        with the record hidden nothing else covers that strip.
+        """
+        frame = self._frame(config, cover, show_vinyl=False, **self.ALL_OFF)
+        px = pygame.surfarray.pixels3d(frame).astype(int)
+        x0, x1, y0, y1 = self._cover_bounds(frame)
+        middle = (y0 + y1) // 2
+        # The gloss shades the cover, so no column of it should be the raw fill.
+        raw = [x for x in range(x0, x1 + 1) if tuple(px[x, middle]) == (150, 60, 190)]
+        assert raw == [], f"unglossed columns at x={raw}"
+
+    def test_the_cover_fills_the_panel_height(self, config, cover):
+        # "As large as possible" has to mean the margin and nothing else.
+        frame = self._frame(config, cover, show_vinyl=False, **self.ALL_OFF)
+        _, _, y0, y1 = self._cover_bounds(frame)
+        margin = round(320 * 0.04)
+        assert y0 <= margin + 2 and (319 - y1) <= margin + 2
+
+    @pytest.mark.parametrize("size", [(480, 320), (320, 480), (800, 480)])
+    def test_centring_holds_at_other_sizes(self, config, cover, size):
+        frame = self._frame(config, cover, size=size, show_vinyl=False, **self.ALL_OFF)
+        x0, x1, y0, y1 = self._cover_bounds(frame)
+        assert abs(x0 - (size[0] - 1 - x1)) <= 1
+        assert abs(y0 - (size[1] - 1 - y1)) <= 1

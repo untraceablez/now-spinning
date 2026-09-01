@@ -145,6 +145,15 @@ async def _async_side(
         server = build_server(config, store, artwork)
         tasks.append(asyncio.create_task(server.serve(), name="web"))
         log.info("web display on http://%s:%d", config.web.host, config.web.port)
+    else:
+        # The `web:` section configures a server that only `web` and `both`
+        # start, so it reads as though it enables one. Say that it does not,
+        # rather than leaving someone loading a page that was never served.
+        log.info(
+            "web display off (display.backend=%s); set it to 'web' or 'both' to serve on port %d",
+            config.display.backend,
+            config.web.port,
+        )
 
     waiter = asyncio.create_task(asyncio.to_thread(stop.wait), name="stop")
     try:

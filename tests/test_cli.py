@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import logging
+import threading
+
 import pytest
 
 from nowspinning.audio.capture import AudioError, DeviceInfo
@@ -80,3 +83,45 @@ def test_devices_says_so_when_there_are_none(monkeypatch, capsys):
     monkeypatch.setattr("nowspinning.cli.list_input_devices", list)
     assert cmd_devices(parse(["devices"])) == 1
     assert "no input devices" in capsys.readouterr().err
+
+
+class TestWebBackendReporting:
+    """The `web:` config section does not, on its own, start a server."""
+
+    def _log(self, caplog, backend, tmp_path):
+        import asyncio
+
+        from nowspinning.artwork import ArtworkCache
+        from nowspinning.cli import _async_side
+        from nowspinning.config import Config
+        from nowspinning.state import StateStore
+
+        config = Config()
+        config.cache_dir = tmp_path
+        config.display.backend = backend
+        config.web.port = 8123  # never bound: stop is already set
+        stop = threading.Event()
+        stop.set()  # return immediately; only the startup lines are of interest
+        with caplog.at_level(logging.INFO, logger="nowspinning"):
+            asyncio.run(
+                _async_side(
+                    config,
+                    StateStore(),
+                    ArtworkCache(config.cache_dir),
+                    None,
+                    None,
+                    stop,
+                    demo=True,
+                )
+            )
+        return caplog.text
+
+    def test_it_says_when_the_web_display_is_off(self, caplog, tmp_path):
+        # The section configures a server that pygame-only never starts, so it
+        # reads as though it enables one. Silence there costs an afternoon.
+        text = self._log(caplog, "pygame", tmp_path)
+        assert "web display off" in text
+        assert "'web' or 'both'" in text
+
+    def test_it_says_where_the_web_display_is_when_on(self, caplog, tmp_path):
+        assert "web display on http://" in self._log(caplog, "web", tmp_path)

@@ -73,6 +73,8 @@ ignore = ["B008"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["E501"]
+# The asset tool must set SDL_VIDEODRIVER before pygame is imported.
+"tools/*" = ["E402"]
 
 [tool.mypy]
 python_version = "3.12"  # numpy 2.5 stubs use 3.12-only syntax

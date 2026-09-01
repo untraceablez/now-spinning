@@ -77,7 +77,10 @@ display:
   # record = cover art on the label of a turning platter
   style: sleeve
   fullscreen: true
-  # 0 x 0 uses the display's native resolution.
+  # Render resolution. 0 x 0 asks the panel what it is and uses that, which is
+  # right for most setups. Set both to pin a size -- useful for a panel that
+  # misreports itself, or to render smaller than native and save a little CPU.
+  # Examples: 480 x 320 (3.5" SPI), 800 x 480 (5" HDMI), 1920 x 1080.
   width: 0
   height: 0
   fps: 30
@@ -92,8 +95,45 @@ display:
   background: "#101014"
   foreground: "#f5f2ea"
   accent: "#c8a24a"
-  # Path to a .ttf. null uses the font bundled with pygame.
+  # Path to a .ttf. When set it overrides every font in the `fonts:` section
+  # below, for setups that want one face everywhere. null leaves `fonts:` alone.
   font_path: null
+
+# Typography. Each line of text on the display picks its own family, weight and
+# slant, so a single family can carry the whole layout through its weights.
+fonts:
+  # google  = download from Google Fonts once, then use the on-disk cache.
+  #           Needs the network only the first time; falls back to the built-in
+  #           font if it cannot reach it, and never blocks the display.
+  # local   = read .ttf/.otf files out of `directory` below.
+  # builtin = the font shipped with pygame. Never touches the network.
+  source: google
+  # Searched recursively when source is "local", and used as a fallback when
+  # "google" cannot reach the network.
+  directory: null
+
+  # weight is 100-900 in hundreds: 300 Light, 400 Regular, 600 SemiBold, 700 Bold.
+  # color is #rrggbb; null takes the colour from the display theme above.
+  heading:                      # the "NOW SPINNING" line
+    family: Bitter
+    weight: 400
+    italic: false
+    color: null
+  title:                        # the track title
+    family: Bitter
+    weight: 700
+    italic: true
+    color: null
+  artist:
+    family: Bitter
+    weight: 600
+    italic: false
+    color: null
+  album:
+    family: Bitter
+    weight: 300
+    italic: true
+    color: null
 
 web:
   host: 0.0.0.0

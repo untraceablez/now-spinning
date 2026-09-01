@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any
 
 from nowspinning.config import Config
+from nowspinning.fonts import FontLibrary
 from nowspinning.state import NowPlaying, StateStore
 
 log = logging.getLogger(__name__)
@@ -119,7 +120,8 @@ class PygameDisplay:
         self._label_cache: dict[str, Any] = {}
         self._sleeve_cache: dict[tuple[int, int], Any] = {}
         self._cover_cache: dict[tuple[str, int, int], Any] = {}
-        self._fonts: dict[int, Any] = {}
+        self._fonts: dict[tuple[str, int], Any] = {}
+        self._library = FontLibrary(config.fonts, config.cache_dir)
         self._platter_size = 0
 
     # -- setup -----------------------------------------------------------
@@ -205,18 +207,33 @@ class PygameDisplay:
             )
         raise RuntimeError("could not open a display.\n  " + "\n  ".join(failures) + hint)
 
-    def font(self, size: int) -> Any:
-        """Cached font at ``size``, honouring ``display.font_path`` when set."""
-        cached = self._fonts.get(size)
-        if cached is None:
-            path = self.config.display.font_path
-            try:
-                cached = self._pygame.font.Font(path or None, size)
-            except OSError:
-                log.warning("could not load font %s; falling back to the built-in font", path)
-                cached = self._pygame.font.Font(None, size)
-            self._fonts[size] = cached
+    def font(self, role: str, size: int) -> Any:
+        """Cached font for a text role at ``size``."""
+        key = (role, size)
+        cached = self._fonts.get(key)
+        if cached is not None:
+            return cached
+        path = self._font_path(role)
+        try:
+            cached = self._pygame.font.Font(str(path) if path else None, size)
+        except OSError:
+            log.warning("could not load font %s; falling back to the built-in font", path)
+            cached = self._pygame.font.Font(None, size)
+        self._fonts[key] = cached
         return cached
+
+    def _font_path(self, role: str) -> Path | None:
+        # display.font_path is the old single-font setting; when it is set it wins
+        # for every role, so upgrading a config does not silently change anything.
+        override = self.config.display.font_path
+        if override:
+            return Path(override)
+        return self._library.resolve(getattr(self.config.fonts, role))
+
+    def _color(self, role: str, default: Color) -> Color:
+        """The role's configured colour, or ``default`` from the theme."""
+        configured = getattr(self.config.fonts, role).color
+        return parse_color(configured, default) if configured else default
 
     # -- main loop -------------------------------------------------------
 
@@ -522,11 +539,12 @@ class PygameDisplay:
         """
         blocks: list[tuple[int, Any]] = []
         heading, heading_color = self._heading(state)
-        heading_font = self.font(max(14, int(height * 0.045)))
+        heading_font = self.font("heading", max(14, int(height * 0.045)))
+        heading_color = self._color("heading", heading_color)
         blocks.append((0, self._render(heading.upper(), heading_font, heading_color, width)))
 
         if state.track is None:
-            body = self.font(max(16, int(height * 0.065)))
+            body = self.font("title", max(16, int(height * 0.065)))
             message = state.message or self._idle_message(state)
             leading = max(2, body.get_height() // 10)
             for index, line in enumerate(self._wrap(message, body, width)[:3]):
@@ -536,22 +554,29 @@ class PygameDisplay:
 
         track = state.track
         title_font = self._fit(
-            track.title, max(20, int(height * 0.12)), width, minimum=max(16, int(height * 0.055))
+            "title",
+            track.title,
+            max(20, int(height * 0.12)),
+            width,
+            minimum=max(16, int(height * 0.055)),
         )
+        title_color = self._color("title", self.theme.foreground)
         leading = max(2, title_font.get_height() // 10)
         for index, line in enumerate(self._wrap(track.title, title_font, width)[:2]):
             gap = int(height * 0.025) if index == 0 else leading
-            blocks.append((gap, self._render(line, title_font, self.theme.foreground, width)))
+            blocks.append((gap, self._render(line, title_font, title_color, width)))
 
-        artist_font = self._fit(track.artist, max(16, int(height * 0.075)), width)
+        artist_font = self._fit("artist", track.artist, max(16, int(height * 0.075)), width)
+        artist_color = self._color("artist", self.theme.accent)
         blocks.append(
-            (int(height * 0.035), self._render(track.artist, artist_font, self.theme.accent, width))
+            (int(height * 0.035), self._render(track.artist, artist_font, artist_color, width))
         )
 
         if track.album:
-            album_font = self._fit(track.album, max(14, int(height * 0.05)), width)
+            album_font = self._fit("album", track.album, max(14, int(height * 0.05)), width)
+            album_color = self._color("album", self.theme.muted)
             blocks.append(
-                (int(height * 0.02), self._render(track.album, album_font, self.theme.muted, width))
+                (int(height * 0.02), self._render(track.album, album_font, album_color, width))
             )
         return blocks
 
@@ -572,14 +597,14 @@ class PygameDisplay:
             return "Music is playing - waiting for a match."
         return "Drop the needle and I'll tell you what it is."
 
-    def _fit(self, text: str, size: int, max_width: int, minimum: int = 12) -> Any:
+    def _fit(self, role: str, text: str, size: int, max_width: int, minimum: int = 12) -> Any:
         """Largest cached font at or below ``size`` whose rendering fits ``max_width``."""
         while size > minimum:
-            font = self.font(size)
+            font = self.font(role, size)
             if font.size(text)[0] <= max_width:
                 return font
             size -= max(1, size // 12)
-        return self.font(minimum)
+        return self.font(role, minimum)
 
     @staticmethod
     def _wrap(text: str, font: Any, max_width: int) -> list[str]:

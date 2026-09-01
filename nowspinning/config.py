@@ -127,6 +127,41 @@ class RecognizerConfig(_Base):
     )
 
 
+class FontChoice(_Base):
+    """One text role's font: family, weight, slant, and an optional colour."""
+
+    family: str | None = Field(
+        default="Bitter",
+        description="Family name. null uses the font bundled with pygame.",
+    )
+    weight: int = Field(default=400, ge=100, le=900, description="100-900, in hundreds.")
+    italic: bool = False
+    color: str | None = Field(
+        default=None,
+        description="#rrggbb. null takes this role's colour from the display theme.",
+    )
+
+
+class FontsConfig(_Base):
+    """Where fonts come from, and which one each line of text uses."""
+
+    source: Literal["google", "local", "builtin"] = Field(
+        default="google",
+        description=(
+            "google downloads and caches from Google Fonts; local reads 'directory'; "
+            "builtin uses the font shipped with pygame and never touches the network."
+        ),
+    )
+    directory: Path | None = Field(
+        default=None,
+        description="Folder of .ttf/.otf files, searched when source is 'local'.",
+    )
+    heading: FontChoice = Field(default_factory=lambda: FontChoice(weight=400))
+    title: FontChoice = Field(default_factory=lambda: FontChoice(weight=700, italic=True))
+    artist: FontChoice = Field(default_factory=lambda: FontChoice(weight=600))
+    album: FontChoice = Field(default_factory=lambda: FontChoice(weight=300, italic=True))
+
+
 class DisplayConfig(_Base):
     """Look and feel of the record animation."""
 
@@ -176,6 +211,7 @@ class Config(_Base):
     recognizer: RecognizerConfig = Field(default_factory=RecognizerConfig)
     display: DisplayConfig = Field(default_factory=DisplayConfig)
     web: WebConfig = Field(default_factory=WebConfig)
+    fonts: FontsConfig = Field(default_factory=FontsConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     cache_dir: Path = Field(default_factory=default_cache_dir)
 

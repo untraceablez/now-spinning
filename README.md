@@ -127,10 +127,46 @@ The keys worth knowing:
 | `recognizer.quiet_period_seconds` | `60.0` | Lookup-free window after a fresh match |
 | `recognizer.recheck_interval_seconds` | `45.0` | Cadence for catching track changes |
 | `recognizer.linger_seconds` | `90.0` | How long the last track survives silence |
+| `display.width` / `.height` | `0` | Render resolution; `0 x 0` uses the panel's native size |
 | `display.backend` | `pygame` | `pygame`, `web`, `both`, or `none` |
 | `display.style` | `sleeve` | `sleeve` (cover in a record sleeve) or `record` (cover on a spinning platter) |
 | `display.rpm` | `33.333` | Rotation speed — `45.0` for a single |
 | `display.device_index` | system default | Which `/dev/dri/card` to draw on; needed for a GPIO/SPI panel, usually `1` |
+| `fonts.source` | `google` | `google`, `local`, or `builtin` |
+| `fonts.<role>.family` | `Bitter` | Family for `heading`, `title`, `artist`, `album` |
+| `fonts.<role>.weight` | varies | `100`–`900`; `400` regular, `700` bold |
+| `fonts.<role>.color` | theme | `#rrggbb` for that line only |
+
+## Typography
+
+Each line of text picks its own family, weight and slant, so one family can carry
+the whole layout:
+
+| Line | Default |
+| --- | --- |
+| `heading` — the "NOW SPINNING" label | Bitter Regular 400 |
+| `title` — the track | Bitter Bold 700 Italic |
+| `artist` | Bitter SemiBold 600 |
+| `album` | Bitter Light 300 Italic |
+
+`fonts.source` decides where the files come from:
+
+- **`google`** (default) downloads each face from Google Fonts once and caches it
+  under `$XDG_CACHE_HOME/now-spinning/fonts`. Only the first run needs the
+  network, and if it cannot get there the display falls back to the built-in font
+  rather than failing to start.
+- **`local`** reads `.ttf`/`.otf` files out of `fonts.directory`, matched by
+  family, weight and slant — `Bitter-BoldItalic.ttf` and `Bitter-700italic.ttf`
+  both work, and subfolders are searched.
+- **`builtin`** uses the font shipped with pygame and never touches the network.
+
+Set `fonts.<role>.color` to give one line its own colour; leave it `null` to take
+the colour from `display.foreground` / `display.accent`. `display.font_path`
+still overrides every role at once, for setups that want a single face.
+
+Rendering resolution is `display.width` / `display.height`. `0 x 0` — the default
+— asks the panel what it is. Set both to pin a size, which is worth doing if a
+panel misreports itself, or to render below native and save a little CPU.
 
 ## Small SPI displays
 

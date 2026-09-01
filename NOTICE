@@ -17,9 +17,15 @@ limitations under the License.
 
 ---
 
+Fonts are not bundled. With fonts.source = "google" the configured families are
+downloaded at runtime from Google Fonts and cached locally; the default family,
+Bitter, is licensed under the SIL Open Font License 1.1.
+
 The record sleeve artwork in nowspinning/ui/assets/ (sleeve.png and
 sleeve-noart.png) is taken from the "Massive Vinyl 2" Bowtie theme by
-Taylor Cohron.
+Taylor Cohron. sleeve.png is a derivative: the paper inner sleeve was painted
+out with tools/clean_sleeve.py so it does not read as a grey block at panel
+sizes.
 
 This product depends on third-party software distributed under their own
 licenses, including but not limited to:

@@ -30,6 +30,9 @@ run in CI and on a laptop with no microphone:
 - Shazam parsing runs against recorded JSON in `tests/fixtures/`
 - engine policy runs against `FakeRecognizer` and a hand-driven clock
 - the pygame renderer draws to an offscreen surface with `SDL_VIDEODRIVER=dummy`
+- font resolution is blocked at the socket by an autouse fixture, so a test that
+  reaches for Google Fonts fails instead of quietly downloading; tests that
+  exercise the download path patch `urlopen` themselves
 
 If you change engine timing or the gate, add a test that says what the new
 behaviour is in terms of a record playing — `tests/test_engine.py` is written that

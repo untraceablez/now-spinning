@@ -73,10 +73,17 @@ def _pygame_ready():
     pygame.quit()
 
 
+def offline_config() -> Config:
+    """A default config that resolves fonts without needing the network."""
+    cfg = Config()
+    cfg.fonts.source = "builtin"
+    return cfg
+
+
 @pytest.fixture
 def display(_pygame_ready):
     """A display wired to an offscreen surface instead of a real window."""
-    view = PygameDisplay(Config(), StateStore())
+    view = PygameDisplay(offline_config(), StateStore())
     view._pygame = pygame
     view._screen = pygame.Surface((1024, 600))
     return view
@@ -154,7 +161,7 @@ def test_fit_leaves_short_text_at_full_size(display):
 
 
 def test_an_unloadable_font_path_falls_back(_pygame_ready, tmp_path):
-    config = Config()
+    config = offline_config()
     config.display.font_path = str(tmp_path / "missing.ttf")
     view = PygameDisplay(config, StateStore())
     view._pygame = pygame

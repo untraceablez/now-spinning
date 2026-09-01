@@ -51,15 +51,36 @@ def record_like(
     return (mixed / np.max(np.abs(mixed)) * amplitude).astype(np.float32)
 
 
+@pytest.fixture(autouse=True)
+def _no_network(monkeypatch):
+    """Fail loudly if anything in the suite tries to fetch a font.
+
+    The suite is meant to run with no network at all -- that is what lets it work
+    in CI and on a laptop on a train. `fonts.source` defaults to "google", so
+    without this a plain `Config()` plus a draw would quietly download and cache
+    four faces, and the first CI run on a cold cache would be the one to notice.
+    Tests that exercise the download path patch this themselves.
+    """
+
+    def refuse(url, timeout=None):
+        raise AssertionError(f"the test suite must not use the network (tried {url})")
+
+    monkeypatch.setattr("nowspinning.fonts.urllib.request.urlopen", refuse)
+
+
 @pytest.fixture
 def config() -> Config:
-    return Config()
+    cfg = Config()
+    # Rendering tests are not about typography; the built-in font needs no files.
+    cfg.fonts.source = "builtin"
+    return cfg
 
 
 @pytest.fixture
 def fast_config(tmp_path) -> Config:
     """Same policy, compressed timings, so engine tests do not wait on real seconds."""
     cfg = Config()
+    cfg.fonts.source = "builtin"
     cfg.cache_dir = tmp_path / "cache"
     cfg.audio.clip_seconds = 3.0
     cfg.detect.start_seconds = 0.0

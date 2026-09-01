@@ -145,6 +145,12 @@ The keys worth knowing:
 | `display.style` | `sleeve` | `sleeve` (cover in a record sleeve) or `record` (cover on a spinning platter) |
 | `display.show_vinyl` | `true` | Sleeve style: draw the turning record behind the cover |
 | `display.show_gloss` | `true` | Sleeve style: lay the jacket's gloss over the cover |
+| `display.show_heading` / `show_title` / `show_artist` / `show_album` | `true` | Which lines of text to show |
+| `display.heading_text` | auto | Replace "Now spinning" with your own words |
+| `display.background_mode` | `solid` | `solid`, or `artwork` for a blurred zoom of the cover |
+| `display.background_blur` / `background_dim` | `0.75` / `0.55` | How far to blur and darken that background |
+| `display.text_outline` | `false` | Outline the text — worth it over the artwork background |
+| `display.text_outline_color` / `_width` | `#000000` / `2` | Outline colour, and its maximum thickness |
 | `display.rpm` | `33.333` | Rotation speed — `45.0` for a single |
 | `display.device_index` | system default | Which `/dev/dri/card` to draw on; needed for a GPIO/SPI panel, usually `1` |
 | `fonts.source` | `google` | `google`, `local`, or `builtin` |

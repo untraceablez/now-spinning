@@ -202,6 +202,49 @@ class DisplayConfig(_Base):
             "cover. false shows the cover art untouched."
         ),
     )
+    # -- what text to show ------------------------------------------------
+    show_heading: bool = Field(default=True, description="Show the label above the track.")
+    heading_text: str | None = Field(
+        default=None,
+        description=(
+            "Replace 'Now spinning' with your own words. null keeps the default. "
+            "Only applies while a track is showing -- the 'Listening' and 'Ready' "
+            "states still say what they are doing."
+        ),
+    )
+    show_title: bool = True
+    show_artist: bool = True
+    show_album: bool = True
+
+    # -- background --------------------------------------------------------
+    background_mode: Literal["solid", "artwork"] = Field(
+        default="solid",
+        description=(
+            "'solid' fills with display.background; 'artwork' uses the cover art, "
+            "zoomed to fill and heavily blurred. Falls back to solid with no art."
+        ),
+    )
+    background_blur: float = Field(
+        default=0.75,
+        ge=0.0,
+        le=1.0,
+        description="How heavily to blur the artwork background. 0 is untouched, 1 is a wash.",
+    )
+    background_dim: float = Field(
+        default=0.55,
+        ge=0.0,
+        le=1.0,
+        description="How far to darken the artwork background towards display.background.",
+    )
+
+    # -- text outline ------------------------------------------------------
+    text_outline: bool = Field(
+        default=False,
+        description="Outline every line of text. Worth turning on over a busy background.",
+    )
+    text_outline_color: str = "#000000"
+    text_outline_width: int = Field(default=2, ge=1, le=6)
+
     fullscreen: bool = True
     width: int = Field(default=0, ge=0, description="0 = use the display's native size.")
     height: int = Field(default=0, ge=0)

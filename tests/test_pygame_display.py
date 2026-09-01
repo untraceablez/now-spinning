@@ -713,3 +713,218 @@ class TestSleeveLayers:
     @pytest.mark.parametrize("gloss", [True, False])
     def test_every_combination_draws(self, config, cover, vinyl, gloss):
         self._draw(config, cover, vinyl=vinyl, gloss=gloss)
+
+
+class TestTextVisibility:
+    """Each line can be switched off, and the heading can be reworded."""
+
+    SHORT = Track(title="So What", artist="Miles Davis", album="Kind of Blue", provider="test")
+
+    def _display(self, config, **overrides):
+        config.display.width, config.display.height = 640, 400
+        config.display.fullscreen = False
+        config.fonts.source = "builtin"
+        for key, value in overrides.items():
+            setattr(config.display, key, value)
+        d = PygameDisplay(config, StateStore())
+        d._pygame = d._init_pygame()
+        d._open_window()
+        return d
+
+    def _blocks(self, config, state, **overrides):
+        d = self._display(config, **overrides)
+        return d._panel_blocks(state, 400, 400)
+
+    def _playing(self):
+        return NowPlaying(status="playing", track=self.SHORT)
+
+    def test_everything_shows_by_default(self, config):
+        assert len(self._blocks(config, self._playing())) == 4
+
+    @pytest.mark.parametrize("flag", ["show_heading", "show_title", "show_artist", "show_album"])
+    def test_each_line_can_be_switched_off(self, config, flag):
+        assert len(self._blocks(config, self._playing(), **{flag: False})) == 3
+
+    def test_switching_them_all_off_leaves_nothing(self, config):
+        blocks = self._blocks(
+            config,
+            self._playing(),
+            show_heading=False,
+            show_title=False,
+            show_artist=False,
+            show_album=False,
+        )
+        assert blocks == []
+
+    def test_the_first_line_never_has_a_gap_above_it(self, config):
+        # Otherwise hiding the heading leaves the block hanging low.
+        blocks = self._blocks(config, self._playing(), show_heading=False)
+        assert blocks[0][0] == 0
+
+    def test_the_heading_can_be_reworded(self, config):
+        d = self._display(config, heading_text="On the platter")
+        assert d._heading(self._playing())[0] == "On the platter"
+
+    def test_an_empty_heading_text_falls_back(self, config):
+        d = self._display(config, heading_text="")
+        assert d._heading(self._playing())[0] == "Now spinning"
+
+    def test_status_headings_are_left_alone(self, config):
+        # "Listening" is telling you what it is doing; a custom label for the
+        # playing state should not overwrite that.
+        d = self._display(config, heading_text="On the platter")
+        assert d._heading(NowPlaying(status="listening"))[0] == "Listening"
+
+    def test_a_track_with_no_album_still_draws(self, config):
+        state = NowPlaying(status="playing", track=Track(title="X", artist="Y", provider="t"))
+        assert len(self._blocks(config, state)) == 3
+
+
+class TestArtworkBackground:
+    """The cover, zoomed to fill and blurred, as an alternative background.
+
+    Every helper returns a *copy* of the frame. pygame has one display surface,
+    so opening a second display frees the first: holding the old surface and
+    reading it later is a use-after-free, and segfaults rather than failing.
+    """
+
+    @pytest.fixture
+    def art(self, tmp_path):
+        pygame.display.set_mode((64, 64))
+        surface = pygame.Surface((400, 400))
+        # Hard halves, so any blur is unmistakable at the boundary.
+        surface.fill((240, 30, 30))
+        surface.fill((30, 30, 240), pygame.Rect(0, 200, 400, 200))
+        path = tmp_path / "art.png"
+        pygame.image.save(surface, str(path))
+        return path
+
+    def _build(self, config, art=None, **overrides):
+        config.display.width, config.display.height = 320, 200
+        config.display.fullscreen = False
+        config.fonts.source = "builtin"
+        for key, value in overrides.items():
+            setattr(config.display, key, value)
+        d = PygameDisplay(config, StateStore())
+        d._pygame = d._init_pygame()
+        d._open_window()
+        d.store.update(status="playing", track=TRACK, artwork_path=art)
+        d.draw(d.store.snapshot())
+        return d
+
+    def _frame(self, config, art=None, **overrides):
+        return self._build(config, art, **overrides)._screen.copy()
+
+    @staticmethod
+    def _corner(frame):
+        return tuple(int(v) for v in pygame.surfarray.pixels3d(frame)[2, 2])
+
+    def test_solid_is_the_default(self, config, art):
+        assert config.display.background_mode == "solid"
+        assert self._corner(self._frame(config, art)) == parse_color(config.display.background)
+
+    def test_artwork_mode_paints_the_cover(self, config, art):
+        frame = self._frame(config, art, background_mode="artwork")
+        assert self._corner(frame) != parse_color(config.display.background)
+
+    def test_it_falls_back_to_solid_with_no_artwork(self, config):
+        # Before the first match there is nothing to blur.
+        frame = self._frame(config, None, background_mode="artwork")
+        assert self._corner(frame) == parse_color(config.display.background)
+
+    def test_an_unreadable_file_falls_back_rather_than_raising(self, config, tmp_path):
+        broken = tmp_path / "broken.png"
+        broken.write_bytes(b"not an image")
+        frame = self._frame(config, broken, background_mode="artwork")
+        assert self._corner(frame) == parse_color(config.display.background)
+
+    def test_blurring_changes_the_picture(self, config, art):
+        sharp = self._frame(config, art, background_mode="artwork", background_blur=0.0)
+        blurred = self._frame(config, art, background_mode="artwork", background_blur=1.0)
+        assert pygame.image.tostring(sharp, "RGB") != pygame.image.tostring(blurred, "RGB")
+
+    def test_blur_softens_the_hard_edge(self, config, art):
+        # The source is two flat halves, so blurring must put intermediate
+        # values at the seam. Counting distinct colours down a column shows it.
+        def colours(blur):
+            frame = self._frame(
+                config, art, background_mode="artwork", background_blur=blur, background_dim=0.0
+            )
+            px = pygame.surfarray.pixels3d(frame)
+            return len({tuple(int(v) for v in px[2, y]) for y in range(200)})
+
+        assert colours(1.0) > colours(0.0)
+
+    def test_dimming_moves_towards_the_background_colour(self, config, art):
+        bright = self._corner(
+            self._frame(config, art, background_mode="artwork", background_dim=0.0)
+        )
+        dimmed = self._corner(
+            self._frame(config, art, background_mode="artwork", background_dim=1.0)
+        )
+        assert dimmed == parse_color(config.display.background)
+        assert bright != dimmed
+
+    def test_the_background_is_cached(self, config, art):
+        d = self._build(config, art, background_mode="artwork")
+        assert len(d._background_cache) == 1
+        d.draw(d.store.snapshot())
+        assert len(d._background_cache) == 1
+
+
+class TestTextOutline:
+    """An outline, for reading over a busy background."""
+
+    def _display(self, config, **overrides):
+        config.display.width, config.display.height = 480, 320
+        config.display.fullscreen = False
+        config.fonts.source = "builtin"
+        for key, value in overrides.items():
+            setattr(config.display, key, value)
+        d = PygameDisplay(config, StateStore())
+        d._pygame = d._init_pygame()
+        d._open_window()
+        return d
+
+    def test_off_by_default(self, config):
+        assert config.display.text_outline is False
+
+    def test_an_outline_makes_the_surface_bigger(self, config):
+        # One display at a time: opening a second frees the first.
+        plain = self._display(config)
+        bare = plain._render("Test", plain.font("title", 40), (255, 255, 255), 10_000).copy()
+        outlined = self._display(config, text_outline=True)
+        edged = outlined._render("Test", outlined.font("title", 40), (255, 255, 255), 10_000)
+        assert edged.get_width() > bare.get_width()
+        assert edged.get_height() > bare.get_height()
+
+    def test_the_outline_colour_is_used(self, config):
+        d = self._display(config, text_outline=True, text_outline_color="#ff0000")
+        surface = d._render("I", d.font("title", 60), (255, 255, 255), 10_000)
+        px = pygame.surfarray.pixels3d(surface)
+        assert any(
+            tuple(px[x, y]) == (255, 0, 0)
+            for x in range(surface.get_width())
+            for y in range(surface.get_height())
+        )
+
+    def test_the_width_is_capped_for_small_text(self, config):
+        # Two pixels around a 14px line is proportionally enormous.
+        d = self._display(config, text_outline=True, text_outline_width=6)
+        small = d._render("x", d.font("album", 12), (255, 255, 255), 10_000)
+        large = d._render("x", d.font("album", 90), (255, 255, 255), 10_000)
+        small_pad = small.get_height() - d.font("album", 12).get_height()
+        large_pad = large.get_height() - d.font("album", 90).get_height()
+        assert small_pad < large_pad
+
+    def test_the_setting_is_still_the_ceiling(self, config):
+        narrow = self._display(config, text_outline=True, text_outline_width=1)
+        thin = narrow._render("x", narrow.font("title", 90), (255, 255, 255), 10_000).get_height()
+        wide = self._display(config, text_outline=True, text_outline_width=4)
+        thick = wide._render("x", wide.font("title", 90), (255, 255, 255), 10_000).get_height()
+        assert thin < thick
+
+    def test_it_draws_a_whole_frame(self, config):
+        d = self._display(config, text_outline=True, background_mode="artwork")
+        d.store.update(status="playing", track=TRACK)
+        d.draw(d.store.snapshot())

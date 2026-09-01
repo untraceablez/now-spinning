@@ -82,6 +82,34 @@ display:
   # shading over the cover; false shows the artwork untouched.
   show_vinyl: true
   show_gloss: true
+
+  # Which lines of text to show. Whatever ends up first sits at the top, so
+  # switching one off closes the gap rather than leaving a hole.
+  show_heading: true
+  show_title: true
+  show_artist: true
+  show_album: true
+  # Replace "Now spinning" with your own words. null keeps the default. Only
+  # applies while a track is showing -- "Listening" and "Ready" still say what
+  # they are doing.
+  heading_text: null
+
+  # solid   = fill with `background` below.
+  # artwork = the cover art, zoomed to fill the panel and blurred into a wash.
+  #           Falls back to solid before the first match.
+  background_mode: solid
+  # 0 leaves the cover sharp, 1 is a complete wash.
+  background_blur: 0.75
+  # How far to darken it towards `background`. Blur alone does not make pale
+  # artwork safe to put text on.
+  background_dim: 0.55
+
+  # Outline every line of text. Worth turning on over the artwork background.
+  # The width is a ceiling -- small text gets a proportionally thinner outline,
+  # because two pixels around a 14px line reads as furry.
+  text_outline: false
+  text_outline_color: "#000000"
+  text_outline_width: 2
   fullscreen: true
   # Render resolution. 0 x 0 asks the panel what it is and uses that, which is
   # right for most setups. Set both to pin a size -- useful for a panel that

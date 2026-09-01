@@ -67,6 +67,18 @@ GROOVE_GAPS = 4
 #: sheen looking like part of the record rather than something laid on top.
 SHEEN_STRENGTH = 22
 
+#: Where to stamp the outline copies of a glyph, as multiples of the width.
+_OUTLINE_OFFSETS: tuple[tuple[int, int], ...] = (
+    (-1, 0),
+    (1, 0),
+    (0, -1),
+    (0, 1),
+    (-1, -1),
+    (1, -1),
+    (-1, 1),
+    (1, 1),
+)
+
 
 def parse_color(value: str, fallback: Color = (0, 0, 0)) -> Color:
     """Parse ``#rrggbb`` into an RGB triple, falling back on anything unparseable."""
@@ -126,6 +138,7 @@ class PygameDisplay:
         self._label_cache: dict[str, Any] = {}
         self._sleeve_cache: dict[tuple[int, int, float], Any] = {}
         self._cover_cache: dict[tuple[str, int, int], Any] = {}
+        self._background_cache: dict[tuple[Any, ...], Any] = {}
         self._fonts: dict[tuple[str, int], Any] = {}
         self._library = FontLibrary(config.fonts, config.cache_dir)
         self._platter_size = 0
@@ -282,7 +295,7 @@ class PygameDisplay:
     def draw(self, state: NowPlaying) -> None:
         screen = self._screen
         width, height = screen.get_size()
-        screen.fill(self.theme.background)
+        self._paint_background(state)
 
         stacked = width < height * 1.2  # portrait or square panels stack instead
         if stacked:
@@ -322,6 +335,69 @@ class PygameDisplay:
         else:
             self._draw_record(centre, diameter, state)
         self._draw_panel(text_rect, state, centred=stacked)
+
+    # -- background ------------------------------------------------------
+
+    def _paint_background(self, state: NowPlaying) -> None:
+        display = self.config.display
+        if display.background_mode == "artwork" and state.artwork_path is not None:
+            wash = self._get_background(self._screen.get_size(), Path(state.artwork_path))
+            if wash is not None:
+                self._screen.blit(wash, (0, 0))
+                return
+        self._screen.fill(self.theme.background)
+
+    def _get_background(self, size: tuple[int, int], path: Path) -> Any:
+        """The cover, zoomed to fill and blurred into a wash."""
+        display = self.config.display
+        key = (size, str(path), display.background_blur, display.background_dim)
+        cached = self._background_cache.get(key)
+        if cached is not None:
+            return cached
+
+        pygame = self._pygame
+        try:
+            image = pygame.image.load(str(path))
+        except Exception as exc:
+            log.warning("could not load background %s: %s", path, exc)
+            return None
+        with contextlib.suppress(pygame.error):
+            image = image.convert()
+
+        width, height = size
+        source_w, source_h = image.get_size()
+        if source_w <= 0 or source_h <= 0:
+            return None
+        # Cover, not fit: fill the panel and let the overflow crop, so there are
+        # never bars down the side.
+        scale = max(width / source_w, height / source_h)
+        scaled = pygame.transform.smoothscale(
+            image, (max(1, round(source_w * scale)), max(1, round(source_h * scale)))
+        )
+        surface = pygame.Surface(size)
+        surface.blit(
+            scaled, ((width - scaled.get_width()) // 2, (height - scaled.get_height()) // 2)
+        )
+
+        # Blur by shrinking and growing again. Twice, because one pass leaves the
+        # edges of the original detail faintly visible.
+        if display.background_blur > 0.0:
+            divisor = max(2, round(2 + display.background_blur * 60))
+            small = (max(1, width // divisor), max(1, height // divisor))
+            for _ in range(2):
+                surface = pygame.transform.smoothscale(
+                    pygame.transform.smoothscale(surface, small), size
+                )
+
+        # Blur alone does not make pale artwork safe to put text on.
+        if display.background_dim > 0.0:
+            veil = pygame.Surface(size)
+            veil.fill(self.theme.background)
+            veil.set_alpha(round(255 * display.background_dim))
+            surface.blit(veil, (0, 0))
+
+        self._background_cache = {key: surface}  # only ever one background
+        return surface
 
     # -- sleeve ----------------------------------------------------------
 
@@ -613,11 +689,23 @@ class PygameDisplay:
         Laying the panel out as measured blocks rather than blitting as we go is
         what lets it centre itself, and keeps long titles from crowding the artist.
         """
+        display = self.config.display
         blocks: list[tuple[int, Any]] = []
-        heading, heading_color = self._heading(state)
-        heading_font = self.font("heading", max(14, int(height * 0.045)))
-        heading_color = self._color("heading", heading_color)
-        blocks.append((0, self._render(heading.upper(), heading_font, heading_color, width)))
+
+        def add(gap: int, surface: Any) -> None:
+            # Whatever ends up first has no gap above it, so switching a line off
+            # closes the space rather than leaving the block hanging low.
+            blocks.append((0 if not blocks else gap, surface))
+
+        if display.show_heading:
+            heading, heading_color = self._heading(state)
+            heading_font = self.font("heading", max(14, int(height * 0.045)))
+            add(
+                0,
+                self._render(
+                    heading.upper(), heading_font, self._color("heading", heading_color), width
+                ),
+            )
 
         if state.track is None:
             body = self.font("title", max(16, int(height * 0.065)))
@@ -625,40 +713,38 @@ class PygameDisplay:
             leading = max(2, body.get_height() // 10)
             for index, line in enumerate(self._wrap(message, body, width)[:3]):
                 gap = int(height * 0.03) if index == 0 else leading
-                blocks.append((gap, self._render(line, body, self.theme.muted, width)))
+                add(gap, self._render(line, body, self.theme.muted, width))
             return blocks
 
         track = state.track
-        title_font = self._fit(
-            "title",
-            track.title,
-            max(20, int(height * 0.12)),
-            width,
-            minimum=max(16, int(height * 0.055)),
-        )
-        title_color = self._color("title", self.theme.foreground)
-        leading = max(2, title_font.get_height() // 10)
-        for index, line in enumerate(self._wrap(track.title, title_font, width)[:2]):
-            gap = int(height * 0.025) if index == 0 else leading
-            blocks.append((gap, self._render(line, title_font, title_color, width)))
+        if display.show_title:
+            title_font = self._fit(
+                "title",
+                track.title,
+                max(20, int(height * 0.12)),
+                width,
+                minimum=max(16, int(height * 0.055)),
+            )
+            title_color = self._color("title", self.theme.foreground)
+            leading = max(2, title_font.get_height() // 10)
+            for index, line in enumerate(self._wrap(track.title, title_font, width)[:2]):
+                gap = int(height * 0.025) if index == 0 else leading
+                add(gap, self._render(line, title_font, title_color, width))
 
-        artist_font = self._fit("artist", track.artist, max(16, int(height * 0.075)), width)
-        artist_color = self._color("artist", self.theme.accent)
-        blocks.append(
-            (int(height * 0.035), self._render(track.artist, artist_font, artist_color, width))
-        )
+        if display.show_artist:
+            artist_font = self._fit("artist", track.artist, max(16, int(height * 0.075)), width)
+            artist_color = self._color("artist", self.theme.accent)
+            add(int(height * 0.035), self._render(track.artist, artist_font, artist_color, width))
 
-        if track.album:
+        if display.show_album and track.album:
             album_font = self._fit("album", track.album, max(14, int(height * 0.05)), width)
             album_color = self._color("album", self.theme.muted)
-            blocks.append(
-                (int(height * 0.02), self._render(track.album, album_font, album_color, width))
-            )
+            add(int(height * 0.02), self._render(track.album, album_font, album_color, width))
         return blocks
 
     def _heading(self, state: NowPlaying) -> tuple[str, Color]:
         if state.track is not None:
-            return "Now spinning", self.theme.accent
+            return self.config.display.heading_text or "Now spinning", self.theme.accent
         if state.status == "identifying":
             return "Identifying", self.theme.muted
         if state.status == "listening":
@@ -700,7 +786,32 @@ class PygameDisplay:
         return lines
 
     def _render(self, text: str, font: Any, color: Color, max_width: int) -> Any:
-        surface = font.render(text, True, color)
+        display = self.config.display
+        if not display.text_outline:
+            surface = font.render(text, True, color)
+        else:
+            # Scale down for small text: two pixels around a 14px album line is
+            # proportionally enormous and reads as furry. The setting is the
+            # ceiling, which is what someone tuning it expects.
+            width = max(1, min(display.text_outline_width, round(font.get_height() / 10)))
+            surface = self._render_outlined(text, font, color, width)
         if surface.get_width() > max_width:
             surface = surface.subsurface((0, 0, max_width, surface.get_height()))
+        return surface
+
+    def _render_outlined(self, text: str, font: Any, color: Color, width: int) -> Any:
+        """Text with a border, for reading over a busy background."""
+        pygame = self._pygame
+        outline = parse_color(self.config.display.text_outline_color, (0, 0, 0))
+        body = font.render(text, True, color)
+        edge = font.render(text, True, outline)
+        pad = width
+        surface = pygame.Surface(
+            (body.get_width() + pad * 2, body.get_height() + pad * 2), pygame.SRCALPHA
+        )
+        # Ring of offsets rather than a filled square: the corners of a square
+        # thicken the diagonals and make small text look furry.
+        for dx, dy in _OUTLINE_OFFSETS:
+            surface.blit(edge, (pad + dx * width, pad + dy * width))
+        surface.blit(body, (pad, pad))
         return surface

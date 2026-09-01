@@ -1,11 +1,24 @@
 # now-spinning as a system service.
 #
 #   sudo cp systemd/now-spinning.service /etc/systemd/system/
-#   sudo systemctl edit now-spinning        # set User= if you are not 'pi'
+#   sudo systemctl edit now-spinning     # see below if the checkout is elsewhere
 #   sudo systemctl enable --now now-spinning
 #
 # The service user must be in the 'audio' and 'video' groups:
 #   sudo usermod -aG audio,video pi
+#
+# This unit expects the checkout at /opt/now-spinning. To run it from somewhere
+# else -- a clone in your home directory, say -- override both paths:
+#
+#   sudo systemctl edit now-spinning
+#   [Service]
+#   WorkingDirectory=/home/pi/now-spinning
+#   ExecStart=
+#   ExecStart=/home/pi/now-spinning/.venv/bin/now-spinning run
+#   ProtectHome=
+#
+# ExecStart must be cleared before being set again; systemd appends otherwise.
+# ProtectHome must be cleared too, or the unit cannot read its own venv.
 
 [Unit]
 Description=now-spinning record player display
@@ -23,9 +36,16 @@ WorkingDirectory=/opt/now-spinning
 ExecStart=/opt/now-spinning/.venv/bin/now-spinning run
 
 # Draw straight to the framebuffer through KMS/DRM, so no desktop session is
-# needed. Older images without a DRM device may need SDL_VIDEODRIVER=fbcon.
+# needed. This only works when the Pi boots to a console: a desktop compositor
+# holds the DRM device and SDL cannot take it while that is running.
 Environment=SDL_VIDEODRIVER=kmsdrm
 Environment=PYTHONUNBUFFERED=1
+
+# Cover art and downloaded fonts are cached under $XDG_CACHE_HOME. Left alone
+# that is ~/.cache, which ProtectHome below makes read-only -- so point it at
+# the directory systemd creates and owns for this service instead.
+CacheDirectory=now-spinning
+Environment=XDG_CACHE_HOME=/var/cache
 
 # The needle can drop at any time; always come back.
 Restart=always
@@ -36,7 +56,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=full
 ProtectHome=read-only
-ReadWritePaths=/opt/now-spinning /var/cache/now-spinning
+ReadWritePaths=/opt/now-spinning
 
 [Install]
 WantedBy=multi-user.target

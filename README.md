@@ -4,15 +4,15 @@ A "now playing" screen for a record player.
 
 Vinyl has no metadata stream — the only thing a turntable emits is sound. So
 `now-spinning` listens. It runs on a Raspberry Pi mounted near the deck, hears the
-music through a microphone, identifies it, and puts a spinning record on the
-attached display with the track, artist, and album.
+music through a microphone, identifies it, and puts the cover art on the attached
+display with the track, artist, and album.
 
-![The pygame display showing a spinning record with the track, artist, and album](docs/screenshot.png)
+![The display showing an album cover in a record sleeve beside the track, artist and album](docs/screenshot.png)
 
-Two styles, set with `display.style`. **`sleeve`** (the default, shown above) puts
-the cover in a record sleeve with the disc pulled halfway out and turning;
-**`record`** puts it on the label of a turning platter. Both fall back to a
-placeholder until the cover art has been fetched.
+Everything on that screen is configurable: which lines of text appear and what
+they say, the fonts and their colours, whether the record shows behind the cover,
+the shadow under it, and whether the background is flat or a blurred wash of the
+artwork. Switch all the text off and the cover fills the panel on its own.
 
 ## How it works
 
@@ -39,6 +39,8 @@ The parts that make it usable next to a real turntable are all in the policy:
 - **Room noise is not music.** A level threshold alone would fire every time the
   furnace kicks on, so the gate also measures spectral flatness — noise is flat,
   music is peaky.
+- **Track changes are caught.** Once the quiet period is over it re-identifies on
+  a cadence, so an album progresses without anyone touching it.
 
 ## Requirements
 
@@ -72,125 +74,190 @@ python3 -m venv .venv
 Extras: `[pygame]` for the framebuffer display, `[web]` for the browser display,
 `[all]` for both.
 
-## Quickstart
+> **Boot to a console, not a desktop.** The display draws straight to the
+> framebuffer through KMS/DRM, and a desktop compositor holds that device
+> exclusively — SSHing in does not change that. `sudo raspi-config` → System
+> Options → Boot / Auto Login → **Console Autologin**. Running inside a desktop
+> session works too, but only from inside it, not over SSH.
 
-Find the microphone:
+## First run
 
-```bash
-now-spinning devices
-```
+Work up from the microphone. Each step tells you whether to bother with the next.
 
-Check the levels it actually sees, with a record playing:
-
-```bash
-now-spinning calibrate --device "USB Audio"
-```
-
-You want music to sit comfortably above `start_threshold_dbfs` and the room to
-sit below `silence_threshold_dbfs`. Adjust in the config until `MUSIC` appears
-when a record is on and `quiet` when it is not.
-
-Confirm recognition works end to end before involving the display:
+**1. Find the microphone.**
 
 ```bash
-now-spinning identify --device "USB Audio"
+.venv/bin/now-spinning devices
 ```
 
-Then run it:
+**2. Check the levels it actually sees**, with a record playing:
 
 ```bash
-now-spinning run --device "USB Audio"            # fullscreen record display
-now-spinning run --backend web --port 8000       # browser display
-now-spinning run --backend both                  # both at once
-now-spinning run --demo --windowed               # no microphone, placeholder tracks
+.venv/bin/now-spinning calibrate --device "USB Audio"
 ```
+
+Music should sit comfortably above `detect.start_threshold_dbfs` and the room
+below `detect.silence_threshold_dbfs`. Adjust until `MUSIC` appears when a record
+is on and `quiet` when it is not.
+
+**3. Confirm recognition works** before involving the display at all:
+
+```bash
+.venv/bin/now-spinning identify --device "USB Audio"
+```
+
+**4. Run it.**
+
+```bash
+.venv/bin/now-spinning run                       # the display, fullscreen
+.venv/bin/now-spinning run --backend web --port 8000
+.venv/bin/now-spinning run --backend both
+.venv/bin/now-spinning run --demo --windowed     # no microphone, placeholder tracks
+```
+
+`--demo` is the quickest way to see layout changes without waiting for a match.
 
 ## Configuration
 
 Copy `config.example.yaml` to `config.yaml` and change what you need — every key
-has a working default, so the file only needs the overrides.
+has a working default, so the file only needs your overrides. That file documents
+every option inline and is the complete reference; the tables below cover the
+ones worth knowing about first.
 
 Searched in order:
 
 1. `--config PATH`
-2. `$XDG_CONFIG_HOME/now-spinning/config.yaml` (usually `~/.config/...`)
+2. `$XDG_CONFIG_HOME/now-spinning/config.yaml` (usually `~/.config/…`)
 3. `~/.now-spinning.yaml`
 4. **`config.yaml` in the working directory** — the checkout, or whatever the
    systemd unit's `WorkingDirectory` points at
 5. `/etc/now-spinning/config.yaml`
 
-On startup the log says which one it actually read, or lists everywhere it
-looked if it found none:
+On startup the log says which one it read, or lists everywhere it looked:
 
 ```
 INFO nowspinning: config: /home/pi/now-spinning/config.yaml
 ```
 
-The keys worth knowing:
+If a change seems to be ignored, check that line first — it is usually a file in
+a place nothing reads.
+
+### Audio
 
 | Key | Default | What it does |
 | --- | --- | --- |
 | `audio.device` | system default | Device index, or a substring of its name so it survives renumbering |
-| `audio.sample_rate` | `16000` | *Preferred* rate; capture negotiates down to one the device accepts |
+| `audio.sample_rate` | `16000` | *Preferred* rate; capture negotiates to one the device accepts |
 | `audio.clip_seconds` | `8.0` | How much audio each lookup gets |
+
+### The music gate
+
+Tune these with `calibrate`; the right numbers depend entirely on mic gain and
+placement.
+
+| Key | Default | What it does |
+| --- | --- | --- |
 | `detect.start_threshold_dbfs` | `-45.0` | Level at which the gate opens |
 | `detect.silence_threshold_dbfs` | `-50.0` | Level below which quiet starts counting |
 | `detect.max_flatness` | `0.35` | Above this the input reads as noise, not music |
 | `detect.silence_seconds` | `20.0` | Sustained quiet before the gate closes |
+
+### Recognition
+
+| Key | Default | What it does |
+| --- | --- | --- |
 | `recognizer.quiet_period_seconds` | `60.0` | Lookup-free window after a fresh match |
 | `recognizer.recheck_interval_seconds` | `45.0` | Cadence for catching track changes |
 | `recognizer.linger_seconds` | `90.0` | How long the last track survives silence |
-| `display.width` / `.height` | `0` | Render resolution; `0 x 0` uses the panel's native size |
+| `recognizer.stale_after_seconds` | `300.0` | Give up on a track not reconfirmed in this long |
+
+Lowering the first two makes track changes appear sooner at the cost of more
+requests. Around 20–30 s is a sensible floor — this is an unofficial endpoint.
+
+### Display and layout
+
+| Key | Default | What it does |
+| --- | --- | --- |
 | `display.backend` | `pygame` | `pygame`, `web`, `both`, or `none` |
+| `display.width` / `.height` | `0` | Render resolution; `0 × 0` uses the panel's native size |
+| `display.device_index` | system default | Which `/dev/dri/card` to draw on; needed for a GPIO/SPI panel |
 | `display.style` | `sleeve` | `sleeve` (cover in a record sleeve) or `record` (cover on a spinning platter) |
-| `display.show_vinyl` | `true` | Sleeve style: draw the turning record behind the cover |
-| `display.show_gloss` | `true` | Sleeve style: lay the jacket's gloss over the cover |
-| `display.show_shadow` | `true` | Sleeve style: cast a soft shadow under the cover |
-| `display.shadow_offset_x` / `_y` | `0.008` / `0.016` | Shadow offset, as a fraction of the cover |
-| `display.shadow_blur` / `_opacity` / `_color` | `0.5` / `0.5` / `#000000` | How soft, how dark, what colour |
-| `display.show_heading` / `show_title` / `show_artist` / `show_album` | `true` | Which lines of text to show |
-| `display.heading_text` | auto | Replace "Now spinning" with your own words |
-| `display.background_mode` | `solid` | `solid`, or `artwork` for a blurred zoom of the cover |
-| `display.background_blur` / `background_dim` | `0.75` / `0.55` | How far to blur and darken that background |
-| `display.text_outline` | `false` | Outline the text — worth it over the artwork background |
-| `display.text_outline_color` / `_width` | `#000000` / `2` | Outline colour, and its maximum thickness |
 | `display.rpm` | `33.333` | Rotation speed — `45.0` for a single |
-| `display.device_index` | system default | Which `/dev/dri/card` to draw on; needed for a GPIO/SPI panel, usually `1` |
-| `fonts.source` | `google` | `google`, `local`, or `builtin` |
-| `fonts.<role>.family` | `Bitter` | Family for `heading`, `title`, `artist`, `album` |
-| `fonts.<role>.weight` | varies | `100`–`900`; `400` regular, `700` bold |
-| `fonts.<role>.color` | theme | `#rrggbb` for that line only |
+| `display.fullscreen` | `true` | |
 
-## Typography
+`0 × 0` asks the panel what it is. Pin both if a panel misreports itself, or to
+render below native and save a little CPU.
 
-Each line of text picks its own family, weight and slant, so one family can carry
-the whole layout:
+### The sleeve
 
-| Line | Default |
+| Key | Default | What it does |
+| --- | --- | --- |
+| `display.show_vinyl` | `true` | The record behind the cover, turning |
+| `display.show_gloss` | `true` | The jacket's gloss and shading over the cover |
+| `display.show_shadow` | `true` | A soft shadow under the cover |
+| `display.shadow_offset_x` / `_y` | `0.008` / `0.016` | Offset, as a fraction of the cover, so it holds its proportions on any panel |
+| `display.shadow_blur` | `0.5` | `0` is a hard edge, `1` a wide haze |
+| `display.shadow_opacity` / `_color` | `0.5` / `#000000` | |
+
+With the record hidden the cover grows into the space it leaves, so the artwork
+stays the same size on screen and the text does not shift.
+
+### Text
+
+| Key | Default | What it does |
+| --- | --- | --- |
+| `display.show_heading` | `true` | The "NOW SPINNING" label |
+| `display.show_title` / `show_artist` / `show_album` | `true` | The three metadata lines |
+| `display.heading_text` | auto | Your own words in place of "Now spinning" |
+| `display.text_outline` | `false` | Outline every line — worth it over the artwork background |
+| `display.text_outline_color` / `_width` | `#000000` / `2` | Colour, and maximum thickness |
+
+Whatever line ends up first sits at the top, so switching one off closes the gap
+rather than leaving a hole. `heading_text` only applies while a track is showing —
+"Listening" and "Ready" still say what they are doing.
+
+**Turn all four off** and the artwork centres and fills the panel, with no idle
+message either. That is the art-only display.
+
+### Background
+
+| Key | Default | What it does |
+| --- | --- | --- |
+| `display.background` | `#101014` | The flat colour |
+| `display.background_mode` | `solid` | `solid`, or `artwork` for a blurred zoom of the cover |
+| `display.background_blur` | `0.75` | `0` leaves the cover sharp, `1` is a wash |
+| `display.background_dim` | `0.55` | How far to darken it towards `background` |
+| `display.foreground` / `accent` | `#f5f2ea` / `#c8a24a` | Default text colours |
+
+Blur alone does not make pale artwork safe to put text on, which is what
+`background_dim` is for. `text_outline: true` pairs well with this mode.
+
+### Typography
+
+Each line picks its own family, weight and slant, so one family can carry the
+whole layout:
+
+| Role | Default |
 | --- | --- |
 | `heading` — the "NOW SPINNING" label | Bitter Regular 400 |
 | `title` — the track | Bitter Bold 700 Italic |
 | `artist` | Bitter SemiBold 600 |
 | `album` | Bitter Light 300 Italic |
 
-`fonts.source` decides where the files come from:
+Each takes `family`, `weight` (100–900), `italic`, and `color` (`null` to use the
+theme's). `fonts.source` decides where the files come from:
 
-- **`google`** (default) downloads each face from Google Fonts once and caches it
-  under `$XDG_CACHE_HOME/now-spinning/fonts`. Only the first run needs the
-  network, and if it cannot get there the display falls back to the built-in font
-  rather than failing to start.
-- **`local`** reads `.ttf`/`.otf` files out of `fonts.directory`, matched by
-  family, weight and slant — `Bitter-BoldItalic.ttf` and `Bitter-700italic.ttf`
-  both work, and subfolders are searched.
+- **`google`** (default) downloads each face once and caches it under
+  `$XDG_CACHE_HOME/now-spinning/fonts`. Only the first run needs the network, and
+  if it cannot get there the display falls back to the built-in font rather than
+  refusing to start.
+- **`local`** reads `.ttf`/`.otf` out of `fonts.directory`, matched by family,
+  weight and slant — `Bitter-BoldItalic.ttf` and `Bitter-700italic.ttf` both
+  work, and subfolders are searched.
 - **`builtin`** uses the font shipped with pygame and never touches the network.
 
-Set `fonts.<role>.color` to give one line its own colour; leave it `null` to take
-the colour from `display.foreground` / `display.accent`. `display.font_path`
-still overrides every role at once, for setups that want a single face.
-
-Rendering resolution is `display.width` / `display.height`. `0 x 0` — the default
-— asks the panel what it is. Set both to pin a size, which is worth doing if a
-panel misreports itself, or to render below native and save a little CPU.
+`display.font_path` overrides every role at once, for setups that want a single
+face everywhere.
 
 ## Small SPI displays
 
@@ -244,20 +311,41 @@ a genuine colour-order problem only once a slower clock has been ruled out.
 
 ## Running as a service
 
+The unit expects the checkout at `/opt/now-spinning`, which is the tidier place
+for something that runs at boot:
+
 ```bash
-sudo cp systemd/now-spinning.service /etc/systemd/system/
-sudo systemctl edit now-spinning        # set User= and the config path if needed
+sudo mv ~/now-spinning /opt/now-spinning
+sudo chown -R pi:pi /opt/now-spinning
+sudo usermod -aG audio,video pi
+
+sudo cp /opt/now-spinning/systemd/now-spinning.service /etc/systemd/system/
 sudo systemctl enable --now now-spinning
 journalctl -u now-spinning -f
 ```
 
-The unit sets `SDL_VIDEODRIVER=kmsdrm` so the display works on Raspberry Pi OS
-Lite with no desktop environment. The service user needs to be in the `audio` and
-`video` groups:
+**To leave the checkout where it is** — in your home directory, say — override
+the paths instead of moving anything:
 
 ```bash
-sudo usermod -aG audio,video "$USER"
+sudo systemctl edit now-spinning
 ```
+
+```ini
+[Service]
+WorkingDirectory=/home/pi/now-spinning
+ExecStart=
+ExecStart=/home/pi/now-spinning/.venv/bin/now-spinning run
+ProtectHome=
+```
+
+`ExecStart=` has to be cleared before being set again or systemd appends to it,
+and `ProtectHome=` has to be cleared or the unit cannot read its own venv.
+
+The unit sets `SDL_VIDEODRIVER=kmsdrm`, so the Pi has to boot to a console — see
+the note under [Install](#install). It also points `XDG_CACHE_HOME` at a
+directory systemd creates for it, because cover art and downloaded fonts would
+otherwise land in `~/.cache`, which `ProtectHome=read-only` makes unwritable.
 
 ## Troubleshooting
 
@@ -271,27 +359,29 @@ than the supported range — most likely 3.14, since 3.13 is supported. Check wi
 
 **`Invalid sample rate [PaErrorCode -9997]`.** The device runs at one fixed rate
 (48 kHz on most USB interfaces) and PortAudio opens it through ALSA's raw device,
-which does not resample. Capture negotiates this automatically — it tries the
-configured rate, then the device's own, then a list of common ones — so if you
-still see this, every format was refused. Check whether another program has the
-device open, and try the other index the same interface exposes: ALSA usually
-lists a card several times and only one entry is usable.
+which does not resample. Capture negotiates this automatically — so if you still
+see this, every format was refused. Check whether another program has the device
+open, and try the other index the same interface exposes: ALSA usually lists a
+card several times and only one entry is usable.
 
 **Never matches anything.** Run `now-spinning identify` — it prints the captured
 level. Below about −40 dBFS is too quiet; raise the gain in `alsamixer` or move
 the mic closer to the speakers. Recognition is much better on the loud middle of a
 track than on a fade-in.
 
-**Matches, but the screen stays blank.** Check the backend: `--backend both` and
-load `http://<pi>:8000` to see whether the problem is recognition or rendering.
+**Config changes seem to be ignored.** Check the `config:` line in the startup
+log. It names the file that was read, or lists every path it tried.
 
 **`pygame.error: kmsdrm not available`.** A desktop compositor (wayfire, labwc,
 Xorg) already holds the DRM device, and SDL cannot take it while that is running.
 This is the normal state on a Raspberry Pi OS *desktop* image, and SSHing in does
 not change it. Boot to the console instead — `sudo raspi-config` → System Options
-→ Boot / Auto Login → **Console Autologin** — which is what the systemd unit
-expects. Running from inside the desktop session works too: the display falls
-back to the `wayland` driver when `SDL_VIDEODRIVER` is not pinned.
+→ Boot / Auto Login → **Console Autologin**. Running from inside the desktop
+session works too: the display falls back to the `wayland` driver when
+`SDL_VIDEODRIVER` is not pinned.
+
+**Matches, but the screen stays blank.** Check the backend: `--backend both` and
+load `http://<pi>:8000` to see whether the problem is recognition or rendering.
 
 **Black screen on a Pi with no desktop.** The service user needs `video` group
 membership and access to `/dev/dri/card*`.
@@ -307,21 +397,29 @@ toward `0.5`. The threshold does not need adjusting for a different sample rate:
 flatness is measured over a fixed 50 Hz–8 kHz band precisely so that one setting
 means the same thing on a 16 kHz mic and a 96 kHz interface.
 
+**Cover art never appears under the service.** The cache has to be writable. The
+shipped unit handles that with `CacheDirectory=` and `XDG_CACHE_HOME`; if you
+wrote your own, set `cache_dir` in the config to somewhere the service user can
+write.
+
 ## Development
 
 ```bash
 uv venv && uv pip install -e '.[dev]'
 pytest
-ruff check . && mypy nowspinning
+ruff check . && ruff format --check . && mypy nowspinning
 ```
 
-Tests use synthetic audio and recorded fixtures; nothing touches the network or a
-sound card, so the suite runs anywhere.
+Nothing in the suite touches the network or a sound card, so it runs anywhere —
+and a fixture enforces that, failing any test that reaches for a font download.
 
 Adding another recognition provider means implementing `Recognizer` in
 `nowspinning/recognize/base.py` — two methods — and registering it in
 `build_recognizer`. Nothing in the engine, the capture layer, or either renderer
 needs to know.
+
+`tools/clean_sleeve.py` regenerates the sleeve artwork from the original, and
+documents what it removes and why.
 
 ## A note on Shazam
 

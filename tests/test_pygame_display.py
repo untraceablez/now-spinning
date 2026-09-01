@@ -596,3 +596,120 @@ class TestSheenIsSmooth:
         d.angle = 45.0
         d.draw(d.store.snapshot())
         assert pygame.image.tostring(d._screen.copy(), "RGB") != before
+
+
+class TestSleeveLayers:
+    """The jacket and the record can each be drawn or not, independently."""
+
+    COVER = (150, 60, 190)
+
+    @pytest.fixture
+    def cover(self, tmp_path):
+        pygame.display.set_mode((64, 64))
+        surface = pygame.Surface((300, 300))
+        surface.fill(self.COVER)
+        path = tmp_path / "cover.png"
+        pygame.image.save(surface, str(path))
+        return path
+
+    def _draw(self, config, cover, *, vinyl=True, gloss=True):
+        config.display.width, config.display.height = 480, 320
+        config.display.fullscreen = False
+        config.display.show_vinyl = vinyl
+        config.display.show_gloss = gloss
+        d = PygameDisplay(config, StateStore())
+        d._pygame = d._init_pygame()
+        d._open_window()
+        d.angle = 40.0
+        d.store.update(status="playing", track=TRACK, artwork_path=cover)
+        d.draw(d.store.snapshot())
+        return d
+
+    def test_both_layers_are_on_by_default(self, config):
+        assert config.display.show_vinyl is True
+        assert config.display.show_gloss is True
+
+    def _record_pixels(self, display) -> int:
+        """Count pixels that look like the record: near-grey, and darker than the
+        cover but lighter than the background.
+
+        Checking for "background" instead would be wrong -- with the record
+        hidden the cover expands into that space, so the honest question is
+        whether any *record* is drawn there, not whether the area is empty.
+        """
+        sleeve = display._get_sleeve(int(480 * 0.52), int(320 * 0.92), 1.0)
+        width = sleeve.get_width()
+        centre = int(480 * 0.28)  # the artwork is centred here, not mid-panel
+        left = centre - width // 2 + int(width * SLEEVE_RIGHT)
+        px = pygame.surfarray.pixels3d(display._screen)
+        band = px[left : centre - width // 2 + width, :].astype(int)
+        spread = band.max(axis=2) - band.min(axis=2)
+        level = band.mean(axis=2)
+        return int(((spread <= 8) & (level > 22) & (level < 120)).sum())
+
+    def test_hiding_the_record_draws_no_record(self, config, cover):
+        assert self._record_pixels(self._draw(config, cover, vinyl=False)) == 0
+
+    def test_showing_the_record_draws_one(self, config, cover):
+        # Guards the test above against passing because the band is mislocated.
+        assert self._record_pixels(self._draw(config, cover, vinyl=True)) > 200
+
+    def _cover_samples(self, display):
+        return [
+            tuple(int(v) for v in pygame.surfarray.pixels3d(display._screen)[x, 160])
+            for x in (90, 120, 150)
+        ]
+
+    def test_hiding_the_gloss_leaves_the_cover_flat(self, config, cover):
+        # smoothscale shifts the exact value slightly, so what matters is that
+        # every sample is the same -- nothing was laid over it.
+        plain = self._draw(config, cover, vinyl=False, gloss=False)
+        samples = self._cover_samples(plain)
+        assert len(set(samples)) == 1, f"cover is not flat: {samples}"
+
+    def test_the_gloss_does_shade_the_cover(self, config, cover):
+        # Guards the test above: if the gloss were a no-op it would pass anyway.
+        glossed = self._draw(config, cover, vinyl=False, gloss=True)
+        assert len(set(self._cover_samples(glossed))) > 1
+
+    def test_the_cover_grows_when_the_record_is_hidden(self, config, cover):
+        # Otherwise it would shrink to leave room for something not drawn.
+        with_disc = self._draw(config, cover, vinyl=True)
+        without = self._draw(config, cover, vinyl=False)
+        wide = with_disc._get_sleeve(int(480 * 0.52), int(320 * 0.92), 1.0)
+        narrow = without._get_sleeve(int(480 * 0.52), int(320 * 0.92), SLEEVE_RIGHT)
+        assert narrow.get_width() > wide.get_width()
+
+    def test_the_text_column_does_not_move(self, config, cover, monkeypatch):
+        """Toggling the record must not shift the text.
+
+        The cover grows into the space the record vacates, so the artwork
+        occupies the same box either way. If this ever fails, the layout is
+        jumping when someone flips a setting.
+        """
+        seen = {}
+
+        def capture(display, key):
+            original = display._draw_panel
+            monkeypatch.setattr(
+                display,
+                "_draw_panel",
+                lambda rect, *a, **k: (seen.__setitem__(key, rect[0]), original(rect, *a, **k))[1],
+            )
+
+        for key, vinyl in (("with", True), ("without", False)):
+            config.display.width, config.display.height = 480, 320
+            config.display.fullscreen = False
+            config.display.show_vinyl = vinyl
+            d = PygameDisplay(config, StateStore())
+            d._pygame = d._init_pygame()
+            d._open_window()
+            d.store.update(status="playing", track=TRACK, artwork_path=cover)
+            capture(d, key)
+            d.draw(d.store.snapshot())
+        assert seen["without"] == seen["with"]
+
+    @pytest.mark.parametrize("vinyl", [True, False])
+    @pytest.mark.parametrize("gloss", [True, False])
+    def test_every_combination_draws(self, config, cover, vinyl, gloss):
+        self._draw(config, cover, vinyl=vinyl, gloss=gloss)

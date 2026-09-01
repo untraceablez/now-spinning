@@ -76,6 +76,12 @@ display:
   # sleeve = cover art in a record sleeve, disc pulled halfway out
   # record = cover art on the label of a turning platter
   style: sleeve
+  # Sleeve style only. show_vinyl draws the record behind the cover, turning;
+  # false shows just the cover in its jacket, and the cover grows to fill the
+  # space so the layout does not shift. show_gloss lays the jacket's gloss and
+  # shading over the cover; false shows the artwork untouched.
+  show_vinyl: true
+  show_gloss: true
   fullscreen: true
   # Render resolution. 0 x 0 asks the panel what it is and uses that, which is
   # right for most setups. Set both to pin a size -- useful for a panel that

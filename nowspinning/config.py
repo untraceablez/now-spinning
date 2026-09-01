@@ -173,6 +173,20 @@ class DisplayConfig(_Base):
             "'record' shows the cover on a spinning platter."
         ),
     )
+    show_vinyl: bool = Field(
+        default=True,
+        description=(
+            "Sleeve style only: draw the record behind the cover, turning. "
+            "false shows just the cover in its jacket."
+        ),
+    )
+    show_gloss: bool = Field(
+        default=True,
+        description=(
+            "Sleeve style only: lay the jacket's gloss and shading over the "
+            "cover. false shows the cover art untouched."
+        ),
+    )
     fullscreen: bool = True
     width: int = Field(default=0, ge=0, description="0 = use the display's native size.")
     height: int = Field(default=0, ge=0)

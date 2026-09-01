@@ -130,6 +130,8 @@ The keys worth knowing:
 | `display.width` / `.height` | `0` | Render resolution; `0 x 0` uses the panel's native size |
 | `display.backend` | `pygame` | `pygame`, `web`, `both`, or `none` |
 | `display.style` | `sleeve` | `sleeve` (cover in a record sleeve) or `record` (cover on a spinning platter) |
+| `display.show_vinyl` | `true` | Sleeve style: draw the turning record behind the cover |
+| `display.show_gloss` | `true` | Sleeve style: lay the jacket's gloss over the cover |
 | `display.rpm` | `33.333` | Rotation speed — `45.0` for a single |
 | `display.device_index` | system default | Which `/dev/dri/card` to draw on; needed for a GPIO/SPI panel, usually `1` |
 | `fonts.source` | `google` | `google`, `local`, or `builtin` |

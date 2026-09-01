@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
 
@@ -76,3 +78,60 @@ def test_example_config_is_valid_and_matches_defaults():
     example = Path(__file__).parent.parent / "config.example.yaml"
     loaded = load_config(example)
     assert loaded.model_dump(exclude={"cache_dir"}) == Config().model_dump(exclude={"cache_dir"})
+
+
+class TestSearchPath:
+    """Where the config is looked for, and in what order."""
+
+    def _write(self, path: Path) -> Path:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("display:\n  show_vinyl: false\n", encoding="utf-8")
+        return path
+
+    def test_a_config_beside_you_is_found(self, tmp_path, monkeypatch):
+        # Copying config.example.yaml to config.yaml in the checkout is the
+        # obvious thing to do, and it used to be silently ignored.
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "empty"))
+        monkeypatch.setenv("HOME", str(tmp_path / "empty"))
+        monkeypatch.chdir(tmp_path)
+        self._write(tmp_path / "config.yaml")
+        import importlib
+
+        import nowspinning.config as mod
+
+        importlib.reload(mod)
+        assert mod.find_config_file() == Path("config.yaml")
+        assert mod.load_config(mod.find_config_file()).display.show_vinyl is False
+
+    def test_the_user_config_beats_the_local_one(self, tmp_path, monkeypatch):
+        # A deliberate ~/.config file should not be shadowed by whatever
+        # directory a service happens to start in.
+        home = tmp_path / "home"
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(home / ".config"))
+        monkeypatch.setenv("HOME", str(home))
+        monkeypatch.chdir(tmp_path)
+        user = self._write(home / ".config" / "now-spinning" / "config.yaml")
+        self._write(tmp_path / "config.yaml")
+        import importlib
+
+        import nowspinning.config as mod
+
+        importlib.reload(mod)
+        assert mod.find_config_file() == user
+
+    def test_nothing_found_is_not_an_error(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "empty"))
+        monkeypatch.setenv("HOME", str(tmp_path / "empty"))
+        monkeypatch.chdir(tmp_path)
+        import importlib
+
+        import nowspinning.config as mod
+
+        importlib.reload(mod)
+        assert mod.find_config_file() is None
+        assert mod.load_config(None) == mod.Config()
+
+    def test_local_config_is_on_the_documented_path(self):
+        from nowspinning.config import CONFIG_SEARCH_PATH
+
+        assert Path("config.yaml") in CONFIG_SEARCH_PATH

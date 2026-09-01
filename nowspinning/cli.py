@@ -25,7 +25,12 @@ from nowspinning.artwork import ArtworkCache
 from nowspinning.audio.capture import AudioCapture, AudioError, list_input_devices
 from nowspinning.audio.clip import write_wav
 from nowspinning.audio.detect import GateEvent, MusicGate, analyze
-from nowspinning.config import Config, load_config
+from nowspinning.config import (
+    CONFIG_SEARCH_PATH,
+    Config,
+    find_config_file,
+    load_config,
+)
 from nowspinning.engine import Engine
 from nowspinning.recognize import build_recognizer
 from nowspinning.recognize.base import Recognizer, RecognizerError
@@ -48,9 +53,30 @@ def setup_logging(level: str) -> None:
     )
 
 
+def config_source(args: argparse.Namespace) -> Path | None:
+    """The config file that will actually be read, if any."""
+    return Path(args.config) if args.config else find_config_file()
+
+
+def log_config_source(args: argparse.Namespace) -> None:
+    """Say which config was used.
+
+    Falling back to defaults in silence is indistinguishable from the file being
+    ignored, which is exactly the wrong thing to leave someone guessing about.
+    """
+    source = config_source(args)
+    if source is not None:
+        log.info("config: %s", source)
+    else:
+        log.info(
+            "config: none found, using defaults (looked for %s)",
+            ", ".join(str(p) for p in CONFIG_SEARCH_PATH),
+        )
+
+
 def config_from_args(args: argparse.Namespace) -> Config:
     """Load the config file, then layer on the flags that override it."""
-    config = load_config(Path(args.config) if args.config else None)
+    config = load_config(config_source(args))
     if getattr(args, "device", None) is not None:
         config.audio.device = args.device
     if getattr(args, "backend", None):
@@ -145,6 +171,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     config = config_from_args(args)
     setup_logging(config.logging.level)
     log.info("now-spinning %s starting (backend=%s)", __version__, config.display.backend)
+    log_config_source(args)
 
     demo = bool(args.demo)
     store = StateStore()

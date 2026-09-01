@@ -15,10 +15,15 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 APP_NAME = "now-spinning"
 
-#: Searched in order when no explicit ``--config`` is given.
+#: Searched in order when no explicit ``--config`` is given. ``config.yaml`` in
+#: the working directory is included because copying config.example.yaml to
+#: config.yaml beside it is the obvious thing to do from a checkout, and it is
+#: also what the systemd unit's WorkingDirectory points at. It sits below the
+#: per-user files so a deliberate one in ~/.config still wins.
 CONFIG_SEARCH_PATH: tuple[Path, ...] = (
     Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / APP_NAME / "config.yaml",
     Path.home() / f".{APP_NAME}.yaml",
+    Path("config.yaml"),
     Path("/etc") / APP_NAME / "config.yaml",
 )
 

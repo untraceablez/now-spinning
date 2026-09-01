@@ -107,11 +107,24 @@ now-spinning run --demo --windowed               # no microphone, placeholder tr
 
 ## Configuration
 
-Copy `config.example.yaml` to `~/.config/now-spinning/config.yaml` and change what
-you need — every key has a working default, so the file only needs the overrides.
+Copy `config.example.yaml` to `config.yaml` and change what you need — every key
+has a working default, so the file only needs the overrides.
 
-Searched in order: `--config PATH`, `$XDG_CONFIG_HOME/now-spinning/config.yaml`,
-`~/.now-spinning.yaml`, `/etc/now-spinning/config.yaml`.
+Searched in order:
+
+1. `--config PATH`
+2. `$XDG_CONFIG_HOME/now-spinning/config.yaml` (usually `~/.config/...`)
+3. `~/.now-spinning.yaml`
+4. **`config.yaml` in the working directory** — the checkout, or whatever the
+   systemd unit's `WorkingDirectory` points at
+5. `/etc/now-spinning/config.yaml`
+
+On startup the log says which one it actually read, or lists everywhere it
+looked if it found none:
+
+```
+INFO nowspinning: config: /home/pi/now-spinning/config.yaml
+```
 
 The keys worth knowing:
 

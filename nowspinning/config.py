@@ -15,17 +15,27 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 APP_NAME = "now-spinning"
 
-#: Searched in order when no explicit ``--config`` is given. ``config.yaml`` in
-#: the working directory is included because copying config.example.yaml to
-#: config.yaml beside it is the obvious thing to do from a checkout, and it is
-#: also what the systemd unit's WorkingDirectory points at. It sits below the
-#: per-user files so a deliberate one in ~/.config still wins.
-CONFIG_SEARCH_PATH: tuple[Path, ...] = (
-    Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / APP_NAME / "config.yaml",
-    Path.home() / f".{APP_NAME}.yaml",
-    Path("config.yaml"),
-    Path("/etc") / APP_NAME / "config.yaml",
-)
+
+def config_search_path() -> tuple[Path, ...]:
+    """Where to look for a config file, in order.
+
+    A function rather than a constant so it reads the environment when it is
+    called: a module-level tuple freezes ``XDG_CONFIG_HOME`` at import time,
+    which is invisible until something sets it afterwards and is then very
+    confusing.
+
+    ``config.yaml`` in the working directory is included because copying
+    config.example.yaml to config.yaml beside it is the obvious thing to do from
+    a checkout, and it is what the systemd unit's WorkingDirectory points at. It
+    sits below the per-user files so a deliberate one in ~/.config still wins.
+    """
+    config_home = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
+    return (
+        config_home / APP_NAME / "config.yaml",
+        Path.home() / f".{APP_NAME}.yaml",
+        Path("config.yaml"),
+        Path("/etc") / APP_NAME / "config.yaml",
+    )
 
 
 def default_cache_dir() -> Path:
@@ -237,7 +247,7 @@ class Config(_Base):
 
 def find_config_file() -> Path | None:
     """Return the first config file on the search path, or None if there is no file."""
-    for candidate in CONFIG_SEARCH_PATH:
+    for candidate in config_search_path():
         if candidate.is_file():
             return candidate
     return None

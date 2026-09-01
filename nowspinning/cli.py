@@ -26,8 +26,8 @@ from nowspinning.audio.capture import AudioCapture, AudioError, list_input_devic
 from nowspinning.audio.clip import write_wav
 from nowspinning.audio.detect import GateEvent, MusicGate, analyze
 from nowspinning.config import (
-    CONFIG_SEARCH_PATH,
     Config,
+    config_search_path,
     find_config_file,
     load_config,
 )
@@ -70,7 +70,7 @@ def log_config_source(args: argparse.Namespace) -> None:
     else:
         log.info(
             "config: none found, using defaults (looked for %s)",
-            ", ".join(str(p) for p in CONFIG_SEARCH_PATH),
+            ", ".join(str(p) for p in config_search_path()),
         )
 
 

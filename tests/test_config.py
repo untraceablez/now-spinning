@@ -40,7 +40,9 @@ def test_missing_explicit_path_is_an_error(tmp_path):
 
 
 def test_no_file_anywhere_falls_back_to_defaults(monkeypatch, tmp_path):
-    monkeypatch.setattr("nowspinning.config.CONFIG_SEARCH_PATH", (tmp_path / "absent.yaml",))
+    monkeypatch.setattr(
+        "nowspinning.config.config_search_path", lambda: (tmp_path / "absent.yaml",)
+    )
     assert load_config() == Config()
 
 
@@ -95,11 +97,8 @@ class TestSearchPath:
         monkeypatch.setenv("HOME", str(tmp_path / "empty"))
         monkeypatch.chdir(tmp_path)
         self._write(tmp_path / "config.yaml")
-        import importlib
-
         import nowspinning.config as mod
 
-        importlib.reload(mod)
         assert mod.find_config_file() == Path("config.yaml")
         assert mod.load_config(mod.find_config_file()).display.show_vinyl is False
 
@@ -112,26 +111,20 @@ class TestSearchPath:
         monkeypatch.chdir(tmp_path)
         user = self._write(home / ".config" / "now-spinning" / "config.yaml")
         self._write(tmp_path / "config.yaml")
-        import importlib
-
         import nowspinning.config as mod
 
-        importlib.reload(mod)
         assert mod.find_config_file() == user
 
     def test_nothing_found_is_not_an_error(self, tmp_path, monkeypatch):
         monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "empty"))
         monkeypatch.setenv("HOME", str(tmp_path / "empty"))
         monkeypatch.chdir(tmp_path)
-        import importlib
-
         import nowspinning.config as mod
 
-        importlib.reload(mod)
         assert mod.find_config_file() is None
         assert mod.load_config(None) == mod.Config()
 
     def test_local_config_is_on_the_documented_path(self):
-        from nowspinning.config import CONFIG_SEARCH_PATH
+        from nowspinning.config import config_search_path
 
-        assert Path("config.yaml") in CONFIG_SEARCH_PATH
+        assert Path("config.yaml") in config_search_path()

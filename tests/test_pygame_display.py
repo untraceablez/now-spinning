@@ -11,6 +11,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
@@ -540,3 +541,58 @@ class TestRenderResolution:
         assert d._screen.get_size() == size
         d.store.update(status="playing", track=TRACK)
         d.draw(d.store.snapshot())
+
+
+class TestSheenIsSmooth:
+    """The motion must not reintroduce anything with an edge.
+
+    Three separate attempts at showing the disc turning were reported as "a grey
+    bar": bright short arcs, then thinner longer ones. The lesson is that any
+    stroke with ends reads as an object lying on the record, however faint. What
+    replaced them is a gradient, and these tests pin that.
+    """
+
+    def _sheen(self, config, monkeypatch, diameter=190):
+        monkeypatch.setenv("SDL_VIDEODRIVER", "dummy")
+        d = PygameDisplay(config, StateStore())
+        d._pygame = d._init_pygame()
+        d._open_window()
+        return d, d._get_sheen(diameter)
+
+    def test_no_step_is_bigger_than_a_couple_of_levels(self, config, monkeypatch):
+        # A bar has a hard edge; a gradient does not. This is the actual property
+        # the user was complaining about, so it is the one worth asserting.
+        _, sheen = self._sheen(config, monkeypatch)
+        px = pygame.surfarray.pixels3d(sheen)[:, :, 0].astype(int)
+        assert abs(np.diff(px, axis=0)).max() <= 2
+        assert abs(np.diff(px, axis=1)).max() <= 2
+
+    def test_it_stays_within_the_artwork_s_own_contrast(self, config, monkeypatch):
+        # The record in the artwork ranges about 9..38 by angle. Adding more than
+        # that would read as something laid on top rather than part of it.
+        _, sheen = self._sheen(config, monkeypatch)
+        assert pygame.surfarray.pixels3d(sheen)[:, :, 0].max() <= 30
+
+    def test_it_fades_out_before_the_rim(self, config, monkeypatch):
+        # A bright edge at the disc's rim would draw a circle, which is just a
+        # curved bar.
+        _, sheen = self._sheen(config, monkeypatch)
+        px = pygame.surfarray.pixels3d(sheen)[:, :, 0]
+        assert px[0, :].max() == 0 and px[-1, :].max() == 0
+        assert px[:, 0].max() == 0 and px[:, -1].max() == 0
+
+    def test_it_is_cached_per_size(self, config, monkeypatch):
+        d, first = self._sheen(config, monkeypatch)
+        assert d._get_sheen(190) is first
+        assert d._get_sheen(120) is not first
+
+    def test_turning_still_changes_the_disc(self, config, monkeypatch):
+        d, _ = self._sheen(config, monkeypatch)
+        d.config.display.width, d.config.display.height = 480, 320
+        d.store.update(status="playing", track=TRACK)
+        d.angle = 0.0
+        d.draw(d.store.snapshot())
+        before = pygame.image.tostring(d._screen.copy(), "RGB")
+        d.angle = 45.0
+        d.draw(d.store.snapshot())
+        assert pygame.image.tostring(d._screen.copy(), "RGB") != before

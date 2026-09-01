@@ -23,6 +23,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import numpy as np
+
 from nowspinning.config import Config
 from nowspinning.fonts import FontLibrary
 from nowspinning.state import NowPlaying, StateStore
@@ -58,13 +60,10 @@ Color = tuple[int, int, int]
 LABEL_RATIO = 0.36
 SPINDLE_RATIO = 0.028
 GROOVE_GAPS = 4
-#: Groove gaps on the exposed disc. Only a little lighter than the artwork's
-#: (28, 28, 28): enough to read as light catching a groove, not enough to look
-#: like a grey bar laid on the record.
-DISC_GROOVE: Color = (52, 52, 58)
-#: Radians each gap spans. Long and thin follows the groove's curve; short and
-#: thick reads as a bar.
-DISC_GROOVE_ARC = 0.8
+#: Peak brightness the sweeping sheen adds, in levels. The artwork's own disc
+#: already ranges from about 9 to 38 with angle, so staying inside that keeps the
+#: sheen looking like part of the record rather than something laid on top.
+SHEEN_STRENGTH = 22
 
 
 def parse_color(value: str, fallback: Color = (0, 0, 0)) -> Color:
@@ -128,6 +127,8 @@ class PygameDisplay:
         self._fonts: dict[tuple[str, int], Any] = {}
         self._library = FontLibrary(config.fonts, config.cache_dir)
         self._platter_size = 0
+        self._sheen: Any = None
+        self._sheen_size = 0
 
     # -- setup -----------------------------------------------------------
 
@@ -341,13 +342,47 @@ class PygameDisplay:
         self._draw_disc_motion(rect)
         return rect
 
+    def _get_sheen(self, diameter: int) -> Any:
+        """A disc-sized sheen: two soft lobes of light, brightest along one axis.
+
+        Rotating this is what makes the record look like it is turning. It is a
+        smooth gradient on purpose -- any stroke with ends, however thin, reads as
+        a bar lying on the record rather than as light moving across it.
+        """
+        if self._sheen is not None and self._sheen_size == diameter:
+            return self._sheen
+
+        pygame = self._pygame
+        half = diameter / 2.0
+        yy, xx = np.mgrid[0:diameter, 0:diameter]
+        dx, dy = xx - half, yy - half
+        radius = np.hypot(dx, dy) / half
+        theta = np.arctan2(dy, dx)
+
+        # Two lobes, so light crosses the visible crescent twice per turn.
+        lobes = (0.5 + 0.5 * np.cos(2.0 * theta)) ** 2
+        # Fade in past the label and out before the rim, so neither edge is a line.
+        band = np.clip((radius - 0.30) / 0.25, 0.0, 1.0) * np.clip((0.98 - radius) / 0.12, 0.0, 1.0)
+        value = (lobes * band * SHEEN_STRENGTH).astype(np.uint8)
+
+        surface = pygame.Surface((diameter, diameter), pygame.SRCALPHA)
+        pixels = pygame.surfarray.pixels3d(surface)
+        pixels[:] = value.T[:, :, None]
+        alpha = pygame.surfarray.pixels_alpha(surface)
+        alpha[:] = 255
+        del pixels, alpha  # release the surface lock before it is used
+
+        self._sheen = surface
+        self._sheen_size = diameter
+        return surface
+
     def _draw_disc_motion(self, sleeve_rect: Any) -> None:
         """Turn the exposed sliver of the disc.
 
-        The disc in the artwork is drawn as concentric rings, which are unchanged
-        by rotation -- spinning the image itself would look completely static. So
-        the motion comes from groove gaps, the same trick the record style uses,
-        clipped to the crescent the sleeve does not cover.
+        The record's grooves are concentric, so rotating the artwork shows
+        nothing. The motion is a sheen instead: a smooth two-lobed gradient,
+        rotated and added over the crescent the sleeve does not cover, so light
+        sweeps across the grooves the way it does on a real record.
         """
         pygame = self._pygame
         cx = sleeve_rect.x + sleeve_rect.width * DISC_CENTRE[0]
@@ -363,22 +398,13 @@ class PygameDisplay:
         previous = self._screen.get_clip()
         self._screen.set_clip(crescent.clip(self._screen.get_rect()))
         try:
-            thickness = max(1, round(radius / 90))
-            for i in range(GROOVE_GAPS):
-                # Only radii past the sleeve edge ever show, so the gaps live in
-                # the outer third of the disc rather than spread across it.
-                gap_radius = radius * (0.74 + 0.07 * i)
-                start = math.radians(self.angle + i * (360.0 / GROOVE_GAPS))
-                span = pygame.Rect(0, 0, round(gap_radius * 2), round(gap_radius * 2))
-                span.center = (round(cx), round(cy))
-                pygame.draw.arc(
-                    self._screen,
-                    DISC_GROOVE,
-                    span,
-                    start,
-                    start + DISC_GROOVE_ARC,
-                    thickness,
-                )
+            sheen = self._get_sheen(round(radius * 2))
+            turned = pygame.transform.rotate(sheen, -self.angle)
+            self._screen.blit(
+                turned,
+                turned.get_rect(center=(round(cx), round(cy))),
+                special_flags=pygame.BLEND_RGB_ADD,
+            )
         finally:
             self._screen.set_clip(previous)
 

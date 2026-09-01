@@ -32,18 +32,45 @@ CX, CY, R = 274.2, 194.0, 172.6
 PAPER_FROM, CLEAN_X = 377, 406
 
 
-def clean(source: pygame.Surface) -> pygame.Surface:
+def radial_profile(source: pygame.Surface) -> dict[int, tuple[int, int, int, int]]:
+    """Median colour of the record at each whole-pixel radius.
+
+    Sampling a single line through the centre is not good enough: that line
+    crosses a bright highlight, so every rebuilt radius inherits it and the
+    repair shows up as a vertical band. Taking the median across the whole clean
+    arc at each radius averages the highlight out.
+    """
     width, height = source.get_size()
+    buckets: dict[int, list[tuple[int, int, int, int]]] = {}
+    for x in range(CLEAN_X, width):
+        for y in range(height):
+            radius = math.hypot(x - CX, y - CY)
+            if radius > R:
+                continue
+            buckets.setdefault(int(radius), []).append(tuple(source.get_at((x, y))))
+    profile = {}
+    for radius, pixels in buckets.items():
+        channels = tuple(sorted(p[c] for p in pixels)[len(pixels) // 2] for c in range(4))
+        profile[radius] = channels  # type: ignore[assignment]
+    return profile
+
+
+def clean(source: pygame.Surface) -> pygame.Surface:
+    _, height = source.get_size()
     out = source.copy()
-    inner = CLEAN_X - CX
+    profile = radial_profile(source)
+    if not profile:
+        raise RuntimeError("no clean record pixels found; check CLEAN_X and the geometry")
+    inner, outer = min(profile), max(profile)
     for x in range(PAPER_FROM, CLEAN_X):
         for y in range(height):
             radius = math.hypot(x - CX, y - CY)
             if radius > R:
                 out.set_at((x, y), (0, 0, 0, 0))  # past the record's edge
                 continue
-            sx = min(width - 1, round(CX + max(radius, inner)))
-            out.set_at((x, y), source.get_at((sx, int(CY))))
+            # Radii inside `inner` are hidden by the jacket in the original too,
+            # so there is nothing to copy: hold the innermost known ring.
+            out.set_at((x, y), profile[min(max(int(radius), inner), outer)])
     return out
 
 

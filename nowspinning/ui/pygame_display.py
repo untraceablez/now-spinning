@@ -58,8 +58,13 @@ Color = tuple[int, int, int]
 LABEL_RATIO = 0.36
 SPINDLE_RATIO = 0.028
 GROOVE_GAPS = 4
-#: Groove gaps on the exposed disc; lighter than the artwork's (28, 28, 28).
-DISC_GROOVE: Color = (92, 92, 100)
+#: Groove gaps on the exposed disc. Only a little lighter than the artwork's
+#: (28, 28, 28): enough to read as light catching a groove, not enough to look
+#: like a grey bar laid on the record.
+DISC_GROOVE: Color = (52, 52, 58)
+#: Radians each gap spans. Long and thin follows the groove's curve; short and
+#: thick reads as a bar.
+DISC_GROOVE_ARC = 0.8
 
 
 def parse_color(value: str, fallback: Color = (0, 0, 0)) -> Color:
@@ -358,7 +363,7 @@ class PygameDisplay:
         previous = self._screen.get_clip()
         self._screen.set_clip(crescent.clip(self._screen.get_rect()))
         try:
-            thickness = max(1, round(radius / 40))
+            thickness = max(1, round(radius / 90))
             for i in range(GROOVE_GAPS):
                 # Only radii past the sleeve edge ever show, so the gaps live in
                 # the outer third of the disc rather than spread across it.
@@ -366,7 +371,14 @@ class PygameDisplay:
                 start = math.radians(self.angle + i * (360.0 / GROOVE_GAPS))
                 span = pygame.Rect(0, 0, round(gap_radius * 2), round(gap_radius * 2))
                 span.center = (round(cx), round(cy))
-                pygame.draw.arc(self._screen, DISC_GROOVE, span, start, start + 0.30, thickness)
+                pygame.draw.arc(
+                    self._screen,
+                    DISC_GROOVE,
+                    span,
+                    start,
+                    start + DISC_GROOVE_ARC,
+                    thickness,
+                )
         finally:
             self._screen.set_clip(previous)
 

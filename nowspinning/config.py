@@ -202,6 +202,32 @@ class DisplayConfig(_Base):
             "cover. false shows the cover art untouched."
         ),
     )
+    # -- drop shadow -------------------------------------------------------
+    show_shadow: bool = Field(
+        default=True,
+        description="Sleeve style only: cast a soft shadow under the cover.",
+    )
+    shadow_offset_x: float = Field(
+        default=0.008,
+        ge=-0.5,
+        le=0.5,
+        description="Shadow offset as a fraction of the cover's width; positive is right.",
+    )
+    shadow_offset_y: float = Field(
+        default=0.016,
+        ge=-0.5,
+        le=0.5,
+        description="Shadow offset as a fraction of the cover's height; positive is down.",
+    )
+    shadow_blur: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description="0 is a hard edge, 1 is a wide haze.",
+    )
+    shadow_opacity: float = Field(default=0.5, ge=0.0, le=1.0)
+    shadow_color: str = "#000000"
+
     # -- what text to show ------------------------------------------------
     show_heading: bool = Field(default=True, description="Show the label above the track.")
     heading_text: str | None = Field(

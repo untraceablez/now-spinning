@@ -28,4 +28,5 @@ cache/
 .vscode/
 .idea/
 *.swp
+*~
 .DS_Store

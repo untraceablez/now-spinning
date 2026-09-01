@@ -80,6 +80,10 @@ SHEEN_STRENGTH = 22
 #: as a fraction of the shorter side. Enough to not look cropped.
 ARTWORK_ONLY_MARGIN = 0.04
 
+#: How far the shadow's blur reaches at shadow_blur = 1, as a fraction of the
+#: cover's shorter side.
+SHADOW_SPREAD = 0.10
+
 #: Where to stamp the outline copies of a glyph, as multiples of the width.
 _OUTLINE_OFFSETS: tuple[tuple[int, int], ...] = (
     (-1, 0),
@@ -152,6 +156,7 @@ class PygameDisplay:
         self._sleeve_cache: dict[tuple[int, int, float], Any] = {}
         self._cover_cache: dict[tuple[str, int, int], Any] = {}
         self._background_cache: dict[tuple[Any, ...], Any] = {}
+        self._shadow_cache: dict[tuple[Any, ...], Any] = {}
         self._fonts: dict[tuple[str, int], Any] = {}
         self._library = FontLibrary(config.fonts, config.cache_dir)
         self._platter_size = 0
@@ -448,7 +453,6 @@ class PygameDisplay:
         Returns the rect the sleeve was drawn into, so the caller can lay text out
         beside it, or ``None`` if the asset is missing and the record was drawn.
         """
-        pygame = self._pygame
         display = self.config.display
         # With the record hidden there is nothing to the right of the jacket, so
         # the jacket alone is what has to fit the box -- otherwise the cover
@@ -464,12 +468,23 @@ class PygameDisplay:
         width, height = sleeve.get_size()
         left_px, right_px = COVER_LEFT * width, right * width
         top_px, bottom_px = COVER_TOP * height, COVER_BOTTOM * height
+
+        # Round the composition to whole pixels and centre *that*, then place the
+        # image relative to it. Centring the image and rounding afterwards lets
+        # two roundings stack, which lands the artwork a pixel off centre.
+        composition = self._pygame.Rect(0, 0, 0, 0)
+        composition.width = max(1, round(right_px - left_px))
+        composition.height = max(1, round(bottom_px - top_px))
+        composition.center = box.center
         rect = sleeve.get_rect()
-        rect.x = round(box.centerx - (left_px + right_px) / 2)
-        rect.y = round(box.centery - (top_px + bottom_px) / 2)
+        rect.x = composition.x - round(left_px)
+        rect.y = composition.y - round(top_px)
 
         split = rect.x + round(width * SLEEVE_RIGHT)
         window = self._art_window(rect)
+        # Under everything, including the record: a shadow drawn over the disc
+        # would look like a smudge on the vinyl rather than a shadow beneath it.
+        self._draw_shadow(window)
         cover = self._get_cover(window.width, window.height, state)
         if cover is not None:
             # Clipped to where the jacket ends. The cover window reaches five
@@ -484,14 +499,71 @@ class PygameDisplay:
             self._blit_clipped(sleeve, rect, split, rect.right)
             self._draw_disc_motion(rect)
 
-        # Report the ink, so the text column sits beside the artwork rather than
+        # Report the artwork, so the text column sits beside it rather than
         # beside the image's transparent margin.
-        return pygame.Rect(
-            round(rect.x + left_px),
-            round(rect.y + top_px),
-            max(1, round(right_px - left_px)),
-            max(1, round(bottom_px - top_px)),
+        return composition
+
+    def _draw_shadow(self, window: Any) -> None:
+        """A soft shadow under the cover.
+
+        The artwork carries no shadow of its own, so this is drawn rather than
+        painted in -- which is what makes it adjustable.
+        """
+        display = self.config.display
+        if not display.show_shadow or display.shadow_opacity <= 0.0:
+            return
+        shadow = self._get_shadow(window.width, window.height)
+        if shadow is None:
+            return
+        pad = (shadow.get_width() - window.width) // 2
+        self._screen.blit(
+            shadow,
+            (
+                window.x - pad + round(window.width * display.shadow_offset_x),
+                window.y - pad + round(window.height * display.shadow_offset_y),
+            ),
         )
+
+    def _get_shadow(self, width: int, height: int) -> Any:
+        display = self.config.display
+        key = (
+            width,
+            height,
+            display.shadow_blur,
+            display.shadow_opacity,
+            display.shadow_color,
+        )
+        cached = self._shadow_cache.get(key)
+        if cached is not None:
+            return cached
+        if width <= 0 or height <= 0:
+            return None
+
+        pygame = self._pygame
+        # Room for the blur to spread into; without it the haze is cut off square
+        # and the shadow gains the hard edge it was supposed to lose.
+        spread = round(display.shadow_blur * min(width, height) * SHADOW_SPREAD)
+        pad = max(1, spread * 2)
+        surface = pygame.Surface((width + pad * 2, height + pad * 2), pygame.SRCALPHA)
+        colour = parse_color(display.shadow_color, (0, 0, 0))
+        surface.fill(
+            (*colour, round(255 * display.shadow_opacity)),
+            pygame.Rect(pad, pad, width, height),
+        )
+
+        if spread > 0:
+            size = surface.get_size()
+            small = (
+                max(1, size[0] // max(2, spread)),
+                max(1, size[1] // max(2, spread)),
+            )
+            for _ in range(2):
+                surface = pygame.transform.smoothscale(
+                    pygame.transform.smoothscale(surface, small), size
+                )
+
+        self._shadow_cache = {key: surface}  # one shadow on screen at a time
+        return surface
 
     def _blit_clipped(self, surface: Any, rect: Any, left: int, right: int) -> None:
         """Blit ``surface`` at ``rect``, showing only the columns in [left, right)."""
@@ -607,7 +679,7 @@ class PygameDisplay:
         span_width = image.get_width() * (right - COVER_LEFT)
         span_height = image.get_height() * (COVER_BOTTOM - COVER_TOP)
         scale = min(max_width / span_width, max_height / span_height)
-        size = (max(1, int(image.get_width() * scale)), max(1, int(image.get_height() * scale)))
+        size = (max(1, round(image.get_width() * scale)), max(1, round(image.get_height() * scale)))
         scaled = pygame.transform.smoothscale(image, size)
         self._sleeve_cache[key] = scaled
         return scaled

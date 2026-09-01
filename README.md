@@ -145,6 +145,9 @@ The keys worth knowing:
 | `display.style` | `sleeve` | `sleeve` (cover in a record sleeve) or `record` (cover on a spinning platter) |
 | `display.show_vinyl` | `true` | Sleeve style: draw the turning record behind the cover |
 | `display.show_gloss` | `true` | Sleeve style: lay the jacket's gloss over the cover |
+| `display.show_shadow` | `true` | Sleeve style: cast a soft shadow under the cover |
+| `display.shadow_offset_x` / `_y` | `0.008` / `0.016` | Shadow offset, as a fraction of the cover |
+| `display.shadow_blur` / `_opacity` / `_color` | `0.5` / `0.5` / `#000000` | How soft, how dark, what colour |
 | `display.show_heading` / `show_title` / `show_artist` / `show_album` | `true` | Which lines of text to show |
 | `display.heading_text` | auto | Replace "Now spinning" with your own words |
 | `display.background_mode` | `solid` | `solid`, or `artwork` for a blurred zoom of the cover |

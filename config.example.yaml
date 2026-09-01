@@ -83,6 +83,18 @@ display:
   show_vinyl: true
   show_gloss: true
 
+  # A soft shadow under the cover. Drawn rather than painted into the artwork,
+  # which is what makes it adjustable.
+  show_shadow: true
+  # Offsets are fractions of the cover, so they hold their proportions on any
+  # panel. Positive x is right, positive y is down.
+  shadow_offset_x: 0.008
+  shadow_offset_y: 0.016
+  # 0 is a hard edge, 1 is a wide haze.
+  shadow_blur: 0.5
+  shadow_opacity: 0.5
+  shadow_color: "#000000"
+
   # Which lines of text to show. Whatever ends up first sits at the top, so
   # switching one off closes the gap rather than leaving a hole.
   show_heading: true

@@ -25,7 +25,8 @@ The record sleeve artwork in nowspinning/ui/assets/ (sleeve.png and
 sleeve-noart.png) is taken from the "Massive Vinyl 2" Bowtie theme by
 Taylor Cohron. sleeve.png is a derivative: the paper inner sleeve was painted
 out with tools/clean_sleeve.py so it does not read as a grey block at panel
-sizes.
+sizes, and the drop shadow was removed by the author in favour of one the
+renderer draws, which can be positioned and blurred from the config.
 
 This product depends on third-party software distributed under their own
 licenses, including but not limited to:

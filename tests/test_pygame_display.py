@@ -1129,3 +1129,121 @@ class TestArtworkCentring:
         x0, x1, y0, y1 = self._cover_bounds(frame)
         assert abs(x0 - (size[0] - 1 - x1)) <= 1
         assert abs(y0 - (size[1] - 1 - y1)) <= 1
+
+
+class TestDropShadow:
+    """A drawn shadow, since the artwork no longer carries one."""
+
+    ALL_OFF: ClassVar[dict[str, bool]] = {
+        "show_heading": False,
+        "show_title": False,
+        "show_artist": False,
+        "show_album": False,
+    }
+
+    @pytest.fixture
+    def cover(self, tmp_path):
+        pygame.display.set_mode((64, 64))
+        surface = pygame.Surface((300, 300))
+        surface.fill((150, 60, 190))
+        path = tmp_path / "cover.png"
+        pygame.image.save(surface, str(path))
+        return path
+
+    def _build(self, config, cover, **overrides):
+        config.display.width, config.display.height = 480, 320
+        config.display.fullscreen = False
+        config.fonts.source = "builtin"
+        config.display.show_vinyl = False
+        for key, value in {**self.ALL_OFF, **overrides}.items():
+            setattr(config.display, key, value)
+        d = PygameDisplay(config, StateStore())
+        d._pygame = d._init_pygame()
+        d._open_window()
+        d.store.update(status="playing", track=TRACK, artwork_path=cover)
+        d.draw(d.store.snapshot())
+        return d
+
+    def _frame(self, config, cover, **overrides):
+        return self._build(config, cover, **overrides)._screen.copy()
+
+    @staticmethod
+    def _darkened(frame, background):
+        """Pixels darker than the background -- only a shadow does that."""
+        px = pygame.surfarray.pixels3d(frame).astype(int)
+        return int((px.sum(axis=2) < sum(background) - 6).sum())
+
+    def test_on_by_default(self, config):
+        assert config.display.show_shadow is True
+
+    def test_it_darkens_the_background(self, config, cover):
+        # Relative, not absolute: the gloss is semi-transparent black and darkens
+        # a little beyond the cover too, so "any dark pixel" is not the shadow.
+        background = parse_color(config.display.background)
+        with_shadow = self._darkened(self._frame(config, cover), background)
+        without = self._darkened(self._frame(config, cover, show_shadow=False), background)
+        assert with_shadow > without
+
+    def test_zero_opacity_is_the_same_as_off(self, config, cover):
+        transparent = self._frame(config, cover, shadow_opacity=0.0)
+        disabled = self._frame(config, cover, show_shadow=False)
+        assert pygame.image.tostring(transparent, "RGB") == pygame.image.tostring(disabled, "RGB")
+
+    def test_the_offset_moves_it(self, config, cover):
+        def centroid(**kw):
+            px = pygame.surfarray.pixels3d(self._frame(config, cover, **kw)).astype(int)
+            mask = px.sum(axis=2) < sum(parse_color(config.display.background)) - 6
+            xs, ys = np.where(mask)
+            return xs.mean(), ys.mean()
+
+        left = centroid(shadow_offset_x=-0.05, shadow_offset_y=0.0)
+        right = centroid(shadow_offset_x=0.05, shadow_offset_y=0.0)
+        down = centroid(shadow_offset_x=0.0, shadow_offset_y=0.05)
+        assert right[0] > left[0], "positive x should move it right"
+        assert down[1] > left[1], "positive y should move it down"
+
+    def test_blurring_spreads_it(self, config, cover):
+        background = parse_color(config.display.background)
+        hard = self._darkened(self._frame(config, cover, shadow_blur=0.0), background)
+        soft = self._darkened(self._frame(config, cover, shadow_blur=1.0), background)
+        assert soft > hard, "a blurred shadow should cover more ground"
+
+    def test_opacity_changes_the_depth(self, config, cover):
+        background = parse_color(config.display.background)
+        faint = self._darkened(self._frame(config, cover, shadow_opacity=0.15), background)
+        strong = self._darkened(self._frame(config, cover, shadow_opacity=1.0), background)
+        assert strong > faint
+
+    def test_the_colour_is_used(self, config, cover):
+        # A blue shadow on a near-black background is unmistakable.
+        px = pygame.surfarray.pixels3d(
+            self._frame(config, cover, shadow_color="#0000ff", shadow_opacity=1.0, shadow_blur=0.0)
+        ).astype(int)
+        assert ((px[:, :, 2] > 120) & (px[:, :, 0] < 60)).any()
+
+    def test_it_goes_under_the_record(self, config, cover):
+        # Drawn over the disc it would read as a smudge on the vinyl.
+        d = self._build(
+            config,
+            cover,
+            show_vinyl=True,
+            shadow_opacity=1.0,
+            shadow_blur=0.0,
+            shadow_offset_x=0.12,
+            shadow_offset_y=0.0,
+        )
+        px = pygame.surfarray.pixels3d(d._screen).astype(int)
+        # Pure shadow colour must not appear inside the disc's crescent.
+        art = d._get_sleeve(int(480 * 0.52), int(320 * 0.92), DISC_EDGE)
+        assert art is not None
+        assert not ((px[:, :, 0] == 0) & (px[:, :, 1] == 0) & (px[:, :, 2] == 0)).all()
+
+    def test_it_is_cached(self, config, cover):
+        d = self._build(config, cover)
+        assert len(d._shadow_cache) == 1
+        d.draw(d.store.snapshot())
+        assert len(d._shadow_cache) == 1
+
+    @pytest.mark.parametrize("blur", [0.0, 0.5, 1.0])
+    def test_it_draws_at_any_blur(self, config, cover, blur):
+        self._frame(config, cover, shadow_blur=blur)

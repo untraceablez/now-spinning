@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import ClassVar
 
 import numpy as np
 import pytest
@@ -933,7 +934,12 @@ class TestTextOutline:
 class TestArtworkOnlyLayout:
     """With every line of text off, the artwork takes the whole panel."""
 
-    ALL_OFF = dict(show_heading=False, show_title=False, show_artist=False, show_album=False)
+    ALL_OFF: ClassVar[dict[str, bool]] = {
+        "show_heading": False,
+        "show_title": False,
+        "show_artist": False,
+        "show_album": False,
+    }
 
     def _display(self, config, size=(480, 320), **overrides):
         config.display.width, config.display.height = size

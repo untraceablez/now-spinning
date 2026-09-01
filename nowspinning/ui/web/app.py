@@ -15,7 +15,9 @@ from typing import TYPE_CHECKING, Any
 
 from nowspinning.artwork import ArtworkCache
 from nowspinning.config import Config
+from nowspinning.fonts import FontLibrary
 from nowspinning.state import NowPlaying, StateStore
+from nowspinning.ui import geometry
 
 if TYPE_CHECKING:  # pragma: no cover
     from fastapi import FastAPI
@@ -48,6 +50,9 @@ def create_app(config: Config, store: StateStore, artwork: ArtworkCache | None =
         ) from exc
 
     cache = artwork or ArtworkCache(config.cache_dir)
+    # One library for the app's lifetime: it memoises, so a face is resolved --
+    # and downloaded, if it comes to that -- once rather than per request.
+    fonts = FontLibrary(config.fonts, config.cache_dir)
     app = FastAPI(title="now-spinning", docs_url=None, redoc_url=None)
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
@@ -61,13 +66,52 @@ def create_app(config: Config, store: StateStore, artwork: ArtworkCache | None =
 
     @app.get("/api/theme")
     async def theme() -> dict[str, Any]:
+        """Everything the page needs to look like the panel does.
+
+        The whole display config rather than a hand-picked subset, so a setting
+        added later reaches the browser without anyone remembering to widen this.
+        """
         display = config.display
         return {
+            # Kept flat as well for anything reading the original three.
             "background": display.background,
             "foreground": display.foreground,
             "accent": display.accent,
             "rpm": display.rpm,
+            "display": display.model_dump(mode="json"),
+            "fonts": {
+                role: getattr(config.fonts, role).model_dump(mode="json")
+                for role in ("heading", "title", "artist", "album")
+            },
+            "geometry": geometry.as_dict(),
         }
+
+    @app.get("/api/asset/{name}", include_in_schema=False)
+    async def asset(name: str) -> FileResponse:
+        """The sleeve artwork, so the page composites the same image."""
+        # Basename only: a name with a path in it must not walk out of assets/.
+        path = geometry.ASSETS / Path(name).name
+        if path.suffix != ".png" or not path.is_file():
+            raise HTTPException(status_code=404, detail="unknown asset")
+        return FileResponse(path, media_type="image/png")
+
+    @app.get("/api/font/{role}", include_in_schema=False)
+    async def font(role: str) -> FileResponse:
+        """The very font file the panel is using, so the two match.
+
+        Served from the local cache rather than linking Google Fonts, because the
+        browser on a wall-mounted tablet may have no route out.
+        """
+        if role not in ("heading", "title", "artist", "album"):
+            raise HTTPException(status_code=404, detail="unknown role")
+        # resolve() may reach the network on a cold cache, and it is synchronous.
+        # Off the event loop, or the first request for a font stalls every other
+        # response -- including the live stream -- for the download's timeout.
+        path = await asyncio.to_thread(fonts.resolve, getattr(config.fonts, role))
+        if path is None:
+            # No file to serve: the page falls back to its own font stack.
+            raise HTTPException(status_code=404, detail="no font file for that role")
+        return FileResponse(path, media_type="font/ttf")
 
     @app.get("/api/art/{key}", include_in_schema=False)
     async def art(key: str) -> FileResponse:

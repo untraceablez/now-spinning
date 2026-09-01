@@ -232,6 +232,19 @@ message either. That is the art-only display.
 Blur alone does not make pale artwork safe to put text on, which is what
 `background_dim` is for. `text_outline: true` pairs well with this mode.
 
+### The browser display
+
+`display.backend: web` or `both` also serves the page at `web.host:web.port`. It
+is not a second design — it reads the same config and lays out the same
+composition, from the same `sleeve.png` and the same geometry, so the two look
+alike. Fonts are served from the Pi's own cache rather than linked from Google,
+so a wall-mounted tablet with no route out still gets the right typeface.
+
+Everything on this page applies to it: style, the sleeve layers, the shadow, the
+text toggles, the artwork background, and the outline. It updates over
+server-sent events, and the record turns with a CSS animation, so an idle
+browser is not repainting from JavaScript.
+
 ### Typography
 
 Each line picks its own family, weight and slant, so one family can carry the

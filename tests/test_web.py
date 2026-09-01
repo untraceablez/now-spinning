@@ -161,3 +161,115 @@ async def test_closing_the_stream_unsubscribes(store):
     assert len(store._subscribers) == 1
     await events.aclose()
     assert store._subscribers == []
+
+
+class TestThemeCarriesTheWholeDisplay:
+    """The page lays itself out from this, so it has to carry everything."""
+
+    def test_the_whole_display_config_is_sent(self, client):
+        # A hand-picked subset would silently omit any setting added later.
+        payload = client.get("/api/theme").json()
+        from nowspinning.config import Config
+
+        assert payload["display"] == Config().display.model_dump(mode="json")
+
+    def test_every_font_role_is_sent(self, client):
+        fonts = client.get("/api/theme").json()["fonts"]
+        assert set(fonts) == {"heading", "title", "artist", "album"}
+        assert fonts["title"]["italic"] is True
+        assert fonts["title"]["weight"] == 700
+
+    def test_the_geometry_is_sent(self, client):
+        geometry = client.get("/api/theme").json()["geometry"]
+        for key in ("image_size", "art_window", "disc_centre", "disc_radius", "sleeve_right"):
+            assert key in geometry
+
+    def test_the_original_flat_keys_still_work(self, client):
+        payload = client.get("/api/theme").json()
+        assert payload["background"] and payload["accent"] and payload["rpm"]
+
+
+class TestAssetRoute:
+    def test_the_sleeve_is_served(self, client):
+        response = client.get("/api/asset/sleeve.png")
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "image/png"
+
+    def test_the_placeholder_is_served(self, client):
+        assert client.get("/api/asset/sleeve-noart.png").status_code == 200
+
+    @pytest.mark.parametrize(
+        "name", ["../../config.py", "..%2F..%2Fconfig.py", "nope.png", "sleeve.txt"]
+    )
+    def test_it_refuses_anything_else(self, client, name):
+        assert client.get(f"/api/asset/{name}").status_code in (404, 400)
+
+
+class TestFontRoute:
+    def test_an_unknown_role_is_a_404(self, client):
+        assert client.get("/api/font/subtitle").status_code == 404
+
+    def test_an_unresolvable_font_is_a_404(self, store, tmp_path):
+        # The page falls back to its own stack; it must not be a 500. Pinned to
+        # the built-in font so this does not depend on what happens to be cached.
+        from nowspinning.ui.web.app import create_app
+
+        config = Config()
+        config.fonts.source = "builtin"
+        config.cache_dir = tmp_path
+        with TestClient(create_app(config, store)) as local:
+            assert local.get("/api/font/title").status_code == 404
+
+    def test_a_resolvable_font_is_served(self, tmp_path, store):
+        from nowspinning.config import Config
+        from nowspinning.ui.web.app import create_app
+
+        family = tmp_path / "fonts"
+        family.mkdir()
+        (family / "Bitter-BoldItalic.ttf").write_bytes(b"TTF")
+        config = Config()
+        config.fonts.source = "local"
+        config.fonts.directory = family
+        config.cache_dir = tmp_path
+        with TestClient(create_app(config, store)) as local:
+            response = local.get("/api/font/title")
+        assert response.status_code == 200
+        assert response.content == b"TTF"
+
+
+class TestGeometryIsShared:
+    """One source of truth for the composition, or the two renderers drift."""
+
+    def test_the_renderer_uses_the_same_constants(self):
+        from nowspinning.ui import geometry
+        from nowspinning.ui import pygame_display as pd
+
+        for name in ("ART_WINDOW", "DISC_CENTRE", "DISC_RADIUS", "SLEEVE_RIGHT", "DISC_EDGE"):
+            assert getattr(pd, name) == getattr(geometry, name), name
+
+    def test_the_payload_is_self_consistent(self):
+        from nowspinning.ui import geometry
+
+        data = geometry.as_dict()
+        assert data["cover_left"] == data["art_window"][0]
+        assert data["cover_top"] == data["art_window"][1]
+        # The disc reaches past the jacket, or there would be no crescent to see.
+        assert data["disc_edge"] > data["sleeve_right"]
+        # The cover overlaps where the record starts, which is why it is clipped.
+        assert data["cover_right"] > data["sleeve_right"]
+
+    def test_geometry_does_not_need_pygame(self):
+        # The web-only install has no SDL; importing it must not reach for one.
+        import subprocess
+        import sys
+
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                "import sys; import nowspinning.ui.geometry;"
+                " sys.exit(1 if 'pygame' in sys.modules else 0)",
+            ],
+            capture_output=True,
+        )
+        assert result.returncode == 0, "importing geometry pulled in pygame"

@@ -1,42 +1,194 @@
+/* The browser display, laid out to match the panel.
+ *
+ * Everything positional is a custom property set from /api/theme, using the
+ * same fractions of sleeve.png the pygame renderer uses. Nothing here hardcodes
+ * a number that also exists in Python -- if the two ever disagree, it is because
+ * the server said so, not because this file drifted. */
+
 :root {
   --bg: #101014;
   --fg: #f5f2ea;
   --accent: #c8a24a;
   --muted: color-mix(in srgb, var(--fg) 55%, var(--bg));
   --spin-duration: 1.8s;
+
+  /* Overwritten from /api/theme; these are only sane starting points. */
+  --art-aspect: 1.17;
+  --cover-width: 84%;
+  --cover-clip: 84%;
+  --sleeve-width: 119%;
+  --sleeve-left: -7%;
+  --sleeve-height: 109%;
+  --sleeve-top: -4%;
+  --split: 83%;
+  --disc-left: 26%;
+  --disc-size: 95%;
+  --disc-top: 2%;
+  --crescent: 62%;
+
+  --shadow-x: 0.8%;
+  --shadow-y: 1.6%;
+  --shadow-blur: 1.2%;
+  --shadow-color: rgba(0, 0, 0, 0.5);
+
+  --wash-blur: 40px;
+  --wash-dim: 0.55;
+
+  --text-shadow: none;
 }
 
 * { box-sizing: border-box; }
 
-html, body {
-  height: 100%;
-  margin: 0;
-}
+html, body { height: 100%; margin: 0; }
 
 body {
   background: var(--bg);
   color: var(--fg);
-  font-family: "Inter", "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif;
+  font-family: "Bitter Title", "Bitter", Georgia, "Times New Roman", serif;
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
 }
 
+/* ---- background ---- */
+
+.wash {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: var(--bg) center / cover no-repeat;
+  display: none;
+}
+
+/* Scaled up so the blur has material to pull from at the edges; without it the
+   corners fade towards transparent and the panel colour shows through. */
+body[data-background="artwork"] .wash {
+  display: block;
+  background-image: var(--wash-image);
+  filter: blur(var(--wash-blur));
+  transform: scale(1.15);
+}
+
+body[data-background="artwork"] .wash::after {
+  content: "";
+  position: absolute;
+  inset: -20%;
+  background: var(--bg);
+  opacity: var(--wash-dim);
+}
+
+/* ---- layout ---- */
+
 .stage {
   height: 100%;
   display: grid;
-  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
   align-items: center;
   gap: clamp(1rem, 4vw, 4rem);
   padding: clamp(1rem, 4vw, 4rem);
 }
 
-/* ---- the record ---- */
+/* No text at all: the artwork takes the whole panel, as it does on the Pi. */
+.stage[data-text="none"] { grid-template-columns: minmax(0, 1fr); }
+.stage[data-text="none"] .meta { display: none; }
 
-.platter {
-  display: grid;
-  place-items: center;
-  min-width: 0;
+.visual { display: grid; place-items: center; min-width: 0; }
+
+/* ---- the sleeve ---- */
+
+.artwork {
+  position: relative;
+  width: min(100%, calc((100vh - 2 * clamp(1rem, 4vw, 4rem)) * var(--art-aspect)));
+  aspect-ratio: var(--art-aspect);
 }
+
+.stage[data-style="record"] .artwork { display: none; }
+.stage[data-style="sleeve"] .record { display: none; }
+
+/* The cover fills the composition's height and starts at its origin, which is
+   what ART_WINDOW works out to. Clipped where the jacket ends, or a sliver of
+   unglossed artwork shows down the edge. */
+.cover {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  width: var(--cover-width);
+  object-fit: cover;
+  clip-path: inset(0 calc(100% - var(--cover-clip)) 0 0);
+}
+
+.cover[hidden] { display: none; }
+
+/* One image, positioned identically in both layers; each shows its own half. */
+.sleeve-img {
+  position: absolute;
+  left: var(--sleeve-left);
+  top: var(--sleeve-top);
+  width: var(--sleeve-width);
+  height: var(--sleeve-height);
+  pointer-events: none;
+}
+
+.jacket { clip-path: inset(0 calc(100% - var(--split)) 0 0); }
+#discImg { clip-path: inset(0 0 0 var(--split)); }
+
+/* Only the wrapper gets inset:0. The jacket IS the image -- giving it inset
+   would override the offsets that place its cover window on the composition. */
+.disc-layer { position: absolute; inset: 0; pointer-events: none; }
+
+body[data-gloss="off"] .jacket,
+body[data-vinyl="off"] .disc-layer,
+body[data-shadow="off"] .art-shadow { display: none; }
+
+/* The cover's silhouette, offset and blurred. Same width as the cover, and
+   clipped the same way, so it never sticks out past the jacket. */
+.art-shadow {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  width: var(--cover-width);
+  clip-path: inset(0 calc(100% - var(--cover-clip)) 0 0);
+  background: var(--shadow-color);
+  filter: blur(var(--shadow-blur));
+  transform: translate(var(--shadow-x), var(--shadow-y));
+}
+
+/* ---- the turning record ---- */
+
+/* The artwork's grooves are concentric, so rotating the image would look
+   completely static. The motion is a sheen instead, exactly as on the panel. */
+.sheen-crescent {
+  position: absolute;
+  left: var(--disc-left);
+  top: var(--disc-top);
+  width: var(--disc-size);
+  aspect-ratio: 1;
+  clip-path: inset(0 0 0 var(--crescent));
+}
+
+.sheen {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    rgba(255, 255, 255, 0.085),
+    rgba(255, 255, 255, 0) 25%,
+    rgba(255, 255, 255, 0.085) 50%,
+    rgba(255, 255, 255, 0) 75%,
+    rgba(255, 255, 255, 0.085)
+  );
+  /* Fade at the label and the rim, so neither edge draws a circle. */
+  -webkit-mask-image: radial-gradient(circle, transparent 30%, #000 58%, #000 88%, transparent 99%);
+  mask-image: radial-gradient(circle, transparent 30%, #000 58%, #000 88%, transparent 99%);
+  animation: spin var(--spin-duration) linear infinite;
+  animation-play-state: paused;
+}
+
+.stage[data-status="playing"] .sheen { animation-play-state: running; }
+
+/* ---- record style ---- */
 
 .record {
   position: relative;
@@ -46,152 +198,136 @@ body {
   background:
     radial-gradient(circle at 50% 50%, #1a1a1e 0 34%, transparent 34%),
     repeating-radial-gradient(circle at 50% 50%, #141418 0 2px, #0c0c0f 2px 4px);
-  box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.06),
-    0 1.5rem 3rem rgba(0, 0, 0, 0.55);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 1.5rem 3rem rgba(0, 0, 0, 0.55);
   animation: spin var(--spin-duration) linear infinite;
   animation-play-state: paused;
 }
 
-/* The platter only turns while something is actually playing. A still record
-   reads as "nothing is on", which is exactly right when the room is quiet. */
 .stage[data-status="playing"] .record { animation-play-state: running; }
 
 .grooves {
   position: absolute;
   inset: 8%;
   border-radius: 50%;
-  background: repeating-conic-gradient(
-    from 0deg,
-    rgba(255, 255, 255, 0.05) 0deg 1.2deg,
-    transparent 1.2deg 90deg
+  background: repeating-radial-gradient(
+    circle at 50% 50%, rgba(255, 255, 255, 0.035) 0 1px, transparent 1px 5px
   );
-  mask: radial-gradient(circle, transparent 0 38%, #000 38% 100%);
-  -webkit-mask: radial-gradient(circle, transparent 0 38%, #000 38% 100%);
 }
 
 .label {
   position: absolute;
   inset: 32%;
   border-radius: 50%;
-  overflow: hidden;
   background: var(--accent);
+  overflow: hidden;
   display: grid;
   place-items: center;
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25);
 }
 
 .label::after {
-  /* Tick mark, so a record with no cover art still visibly turns. */
   content: "";
   position: absolute;
-  top: 10%;
+  top: 8%;
   width: 3%;
   height: 16%;
-  border-radius: 999px;
-  background: rgba(0, 0, 0, 0.28);
+  background: rgba(0, 0, 0, 0.35);
 }
 
-.label img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transition: opacity 400ms ease;
-}
-
+.label img { width: 100%; height: 100%; object-fit: cover; }
 .label img[hidden] { display: none; }
 .label:has(img:not([hidden]))::after { display: none; }
 
 .spindle {
   position: absolute;
-  inset: 48%;
+  inset: 47.5%;
   border-radius: 50%;
   background: var(--bg);
-  box-shadow: inset 0 0 0.4rem rgba(0, 0, 0, 0.8);
 }
 
 @keyframes spin { to { transform: rotate(360deg); } }
 
 @media (prefers-reduced-motion: reduce) {
-  .record { animation: none; }
+  .record, .sheen { animation: none; }
 }
 
-/* ---- metadata ---- */
+/* ---- text ---- */
 
-.meta {
-  min-width: 0;
-}
+.meta { min-width: 0; }
 
 .heading {
-  margin: 0 0 0.6em;
-  font-size: clamp(0.7rem, 1.4vw, 1rem);
-  letter-spacing: 0.22em;
+  margin: 0 0 0.6rem;
+  font-family: var(--font-heading);
+  font-weight: var(--weight-heading);
+  font-style: var(--style-heading);
+  font-size: clamp(0.7rem, 1.6vw, 1rem);
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--muted);
+  color: var(--color-heading, var(--accent));
+  text-shadow: var(--text-shadow);
 }
-
-.stage[data-status="playing"] .heading { color: var(--accent); }
 
 .title {
   margin: 0;
-  font-size: clamp(1.6rem, 4.6vw, 4.4rem);
+  font-family: var(--font-title);
+  font-weight: var(--weight-title);
+  font-style: var(--style-title);
+  font-size: clamp(1.6rem, 5vw, 4rem);
   line-height: 1.05;
-  font-weight: 650;
-  letter-spacing: -0.015em;
+  color: var(--color-title, var(--fg));
+  text-shadow: var(--text-shadow);
   overflow-wrap: anywhere;
 }
 
 .artist {
-  margin: 0.4em 0 0;
-  font-size: clamp(1rem, 2.4vw, 2.1rem);
-  color: var(--accent);
-  overflow-wrap: anywhere;
+  margin: 0.7rem 0 0;
+  font-family: var(--font-artist);
+  font-weight: var(--weight-artist);
+  font-style: var(--style-artist);
+  font-size: clamp(1rem, 2.6vw, 2rem);
+  color: var(--color-artist, var(--accent));
+  text-shadow: var(--text-shadow);
 }
 
 .album {
-  margin: 0.5em 0 0;
-  font-size: clamp(0.85rem, 1.5vw, 1.3rem);
-  color: var(--muted);
-  overflow-wrap: anywhere;
+  margin: 0.35rem 0 0;
+  font-family: var(--font-album);
+  font-weight: var(--weight-album);
+  font-style: var(--style-album);
+  font-size: clamp(0.85rem, 1.8vw, 1.35rem);
+  color: var(--color-album, var(--muted));
+  text-shadow: var(--text-shadow);
 }
-
-.album:empty, .artist:empty, .note:empty { display: none; }
 
 .note {
-  margin: 1.4em 0 0;
-  font-size: clamp(0.75rem, 1.2vw, 1rem);
+  margin: 0.6rem 0 0;
+  font-size: clamp(0.8rem, 1.6vw, 1.1rem);
   color: var(--muted);
+  text-shadow: var(--text-shadow);
 }
 
-.meta > * { transition: opacity 260ms ease; }
+.album:empty, .artist:empty, .note:empty, .heading:empty, .title:empty { display: none; }
 
-/* ---- connection banner ---- */
+.heading[hidden], .title[hidden], .artist[hidden], .album[hidden] { display: none; }
 
 .connection {
   position: fixed;
-  bottom: 1rem;
-  right: 1rem;
-  padding: 0.4rem 0.8rem;
-  border-radius: 999px;
+  bottom: 0.75rem;
+  right: 0.9rem;
   font-size: 0.75rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--bg);
-  background: var(--accent);
+  color: var(--muted);
+  background: color-mix(in srgb, var(--bg) 80%, transparent);
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
 }
 
-.connection[hidden] { display: none; }
-
-/* ---- narrow / portrait screens stack instead ---- */
-
-@media (max-aspect-ratio: 6/5) {
+/* Portrait and small screens stack, as the panel does. */
+@media (max-aspect-ratio: 1/1) {
   .stage {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto auto;
-    justify-items: center;
-    text-align: center;
     align-content: center;
+    text-align: center;
   }
   .record { width: min(74vw, 46vh); }
-  .meta { max-width: 42ch; }
+  .artwork { width: min(88vw, calc(46vh * var(--art-aspect))); }
 }

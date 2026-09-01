@@ -28,6 +28,7 @@ import numpy as np
 from nowspinning.config import Config
 from nowspinning.fonts import FontLibrary
 from nowspinning.state import NowPlaying, StateStore
+from nowspinning.ui import geometry
 
 log = logging.getLogger(__name__)
 
@@ -36,34 +37,18 @@ log = logging.getLogger(__name__)
 #: work on a desktop image.
 DRIVER_PREFERENCE: tuple[str, ...] = ("kmsdrm", "wayland", "x11")
 
-ASSETS = Path(__file__).with_name("assets")
-
-#: Where the cover sits inside sleeve.png, as fractions of that image. Taken from
-#: the original theme's stylesheet: a 355x355 window at (27, 14) in a 453x387
-#: sheet, which is why the artwork reads as square despite the sleeve being taller
-#: than it is wide.
-ART_WINDOW = (27 / 453, 14 / 387, 355 / 453, 355 / 387)
-
-#: The disc in sleeve.png, as fractions of that image, fitted from its opaque
-#: pixels: centre (274.2, 194.0) and radius 172.6 in a 453x387 sheet, which
-#: reproduces every measured column to within a pixel.
-DISC_CENTRE = (274.2 / 453, 194.0 / 387)
-DISC_RADIUS = 172.6 / 453
-
-#: The composition to centre and scale by: the cover, plus the record when it is
-#: drawn. Deliberately not the image's alpha bounds -- the jacket's shadow
-#: reaches 23px to the left of the cover and none to the right, so centring on
-#: ink puts the cover visibly right of middle. The eye centres on the artwork.
-COVER_LEFT = ART_WINDOW[0]
-COVER_TOP = ART_WINDOW[1]
-COVER_BOTTOM = ART_WINDOW[1] + ART_WINDOW[3]
-DISC_EDGE = DISC_CENTRE[0] + DISC_RADIUS
-
-#: Where the jacket ends and the record begins, as a fraction of sleeve.png.
-#: Everything left of it is jacket, everything right is record, which is what
-#: lets the two be drawn -- or not drawn -- independently. It is also the left
-#: edge of the visible crescent, so the only part worth putting motion into.
-SLEEVE_RIGHT = 377 / 453
+# Geometry lives in ui/geometry.py so the web page can lay out the same
+# composition without importing SDL. Re-exported here for readability at the
+# call sites, which all read as "a fraction of the sleeve".
+ART_WINDOW = geometry.ART_WINDOW
+ASSETS = geometry.ASSETS
+COVER_BOTTOM = geometry.COVER_BOTTOM
+COVER_LEFT = geometry.COVER_LEFT
+COVER_TOP = geometry.COVER_TOP
+DISC_CENTRE = geometry.DISC_CENTRE
+DISC_EDGE = geometry.DISC_EDGE
+DISC_RADIUS = geometry.DISC_RADIUS
+SLEEVE_RIGHT = geometry.SLEEVE_RIGHT
 
 Color = tuple[int, int, int]
 
@@ -78,7 +63,7 @@ SHEEN_STRENGTH = 22
 
 #: Breathing room left around the artwork when it has the panel to itself,
 #: as a fraction of the shorter side. Enough to not look cropped.
-ARTWORK_ONLY_MARGIN = 0.04
+ARTWORK_ONLY_MARGIN = geometry.ARTWORK_ONLY_MARGIN
 
 #: How far the shadow's blur reaches at shadow_blur = 1, as a fraction of the
 #: cover's shorter side.

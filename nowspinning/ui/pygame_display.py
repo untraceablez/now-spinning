@@ -67,6 +67,10 @@ GROOVE_GAPS = 4
 #: sheen looking like part of the record rather than something laid on top.
 SHEEN_STRENGTH = 22
 
+#: Breathing room left around the artwork when it has the panel to itself,
+#: as a fraction of the shorter side. Enough to not look cropped.
+ARTWORK_ONLY_MARGIN = 0.04
+
 #: Where to stamp the outline copies of a glyph, as multiples of the width.
 _OUTLINE_OFFSETS: tuple[tuple[int, int], ...] = (
     (-1, 0),
@@ -297,6 +301,10 @@ class PygameDisplay:
         width, height = screen.get_size()
         self._paint_background(state)
 
+        if not self._any_text_shown():
+            self._draw_artwork_only(state)
+            return
+
         stacked = width < height * 1.2  # portrait or square panels stack instead
         if stacked:
             diameter = int(min(width * 0.82, height * 0.5))
@@ -335,6 +343,30 @@ class PygameDisplay:
         else:
             self._draw_record(centre, diameter, state)
         self._draw_panel(text_rect, state, centred=stacked)
+
+    def _any_text_shown(self) -> bool:
+        display = self.config.display
+        return any(
+            (display.show_heading, display.show_title, display.show_artist, display.show_album)
+        )
+
+    def _draw_artwork_only(self, state: NowPlaying) -> None:
+        """Fill the panel with the artwork when there is no text to make room for.
+
+        With every line switched off, the column layout is just wasted space, so
+        the artwork centres and grows to the panel less a small margin. The idle
+        message goes too: "no text" has to mean no text, or the one screen that
+        was supposed to be purely artwork would still say "Drop the needle".
+        """
+        width, height = self._screen.get_size()
+        margin = round(min(width, height) * ARTWORK_ONLY_MARGIN)
+        box = self._pygame.Rect(
+            margin, margin, max(1, width - margin * 2), max(1, height - margin * 2)
+        )
+        if self.config.display.style == "sleeve":
+            self._draw_sleeve(box, state)
+        else:
+            self._draw_record(box.center, min(box.width, box.height), state)
 
     # -- background ------------------------------------------------------
 

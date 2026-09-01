@@ -928,3 +928,85 @@ class TestTextOutline:
         d = self._display(config, text_outline=True, background_mode="artwork")
         d.store.update(status="playing", track=TRACK)
         d.draw(d.store.snapshot())
+
+
+class TestArtworkOnlyLayout:
+    """With every line of text off, the artwork takes the whole panel."""
+
+    ALL_OFF = dict(show_heading=False, show_title=False, show_artist=False, show_album=False)
+
+    def _display(self, config, size=(480, 320), **overrides):
+        config.display.width, config.display.height = size
+        config.display.fullscreen = False
+        config.fonts.source = "builtin"
+        for key, value in overrides.items():
+            setattr(config.display, key, value)
+        d = PygameDisplay(config, StateStore())
+        d._pygame = d._init_pygame()
+        d._open_window()
+        d.store.update(status="playing", track=TRACK)
+        return d
+
+    def _box(self, d, monkeypatch):
+        """The box the artwork was asked to fill."""
+        seen = {}
+        original = d._draw_sleeve
+        monkeypatch.setattr(
+            d,
+            "_draw_sleeve",
+            lambda box, state: (seen.setdefault("box", box), original(box, state))[1],
+        )
+        d.draw(d.store.snapshot())
+        return seen["box"]
+
+    def test_any_single_line_keeps_the_column_layout(self, config):
+        for flag in ("show_heading", "show_title", "show_artist", "show_album"):
+            overrides = dict(self.ALL_OFF)
+            overrides[flag] = True
+            d = self._display(config, **overrides)
+            assert d._any_text_shown(), f"{flag} on should keep the text layout"
+
+    def test_all_off_switches_layout(self, config):
+        assert self._display(config, **self.ALL_OFF)._any_text_shown() is False
+
+    def test_the_artwork_is_centred_on_the_panel(self, config, monkeypatch):
+        d = self._display(config, **self.ALL_OFF)
+        box = self._box(d, monkeypatch)
+        assert box.center == (240, 160)
+
+    def test_the_artwork_gets_bigger(self, config, monkeypatch):
+        # The whole point: no text means no reason to sit in a column.
+        with_text = self._box(self._display(config), monkeypatch)
+        without = self._box(self._display(config, **self.ALL_OFF), monkeypatch)
+        assert without.width > with_text.width
+        assert without.height >= with_text.height
+
+    def test_a_margin_is_left_around_it(self, config, monkeypatch):
+        # Filling edge to edge looks cropped rather than deliberate.
+        box = self._box(self._display(config, **self.ALL_OFF), monkeypatch)
+        assert box.left > 0 and box.top > 0
+        assert box.right < 480 and box.bottom < 320
+
+    def test_no_panel_is_drawn(self, config, monkeypatch):
+        # Including the idle message: "no text" has to mean no text.
+        d = self._display(config, **self.ALL_OFF)
+        called = []
+        monkeypatch.setattr(d, "_draw_panel", lambda *a, **k: called.append(a))
+        d.draw(d.store.snapshot())
+        d.store.update(status="listening", track=None)
+        d.draw(d.store.snapshot())
+        assert called == []
+
+    def test_the_record_style_gets_the_same_treatment(self, config):
+        d = self._display(config, style="record", **self.ALL_OFF)
+        d.draw(d.store.snapshot())
+
+    @pytest.mark.parametrize("size", [(480, 320), (320, 480), (800, 480), (240, 240)])
+    def test_it_draws_at_any_panel_size(self, config, size):
+        d = self._display(config, size=size, **self.ALL_OFF)
+        d.draw(d.store.snapshot())
+
+    def test_it_still_works_with_nothing_playing(self, config):
+        d = self._display(config, **self.ALL_OFF)
+        d.store.update(status="idle", track=None)
+        d.draw(d.store.snapshot())

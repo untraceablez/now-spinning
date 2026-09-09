@@ -108,11 +108,13 @@ function applyGeometry(geometry, display) {
   root.setProperty("--sleeve-height", pct(1.0));
   root.setProperty("--sleeve-top", pct(0));
 
-  // Vinyl (vinyl.png) positioned behind case
-  // Vinyl is 578x578 in a 600x600 composition, offset to the right
-  root.setProperty("--disc-left", pct(0));
-  root.setProperty("--disc-size", pct(1.0)); // Full size within composition
-  root.setProperty("--disc-top", pct(0));
+  // Vinyl record positioning: offset within composition
+  // Use disc_centre from geometry for proper positioning
+  const discCentre = g.disc_centre;
+  const discRadius = g.disc_radius;
+  root.setProperty("--disc-left", pct(Math.max(0, discCentre[0] - discRadius)));
+  root.setProperty("--disc-size", pct(discRadius * 2));
+  root.setProperty("--disc-top", pct(Math.max(0, discCentre[1] - discRadius)));
   root.setProperty("--crescent", pct(1.0)); // Fully visible (no crescent clipping)
 }
 

@@ -479,36 +479,31 @@ class PygameDisplay:
             vinyl_rect = vinyl.get_rect(topleft=(vinyl_x, vinyl_y))
             self._screen.blit(vinyl, vinyl_rect)
 
+        # Disc motion (spinning sheen) - drawn before artwork so artwork covers it.
+        if vinyl is not None and display.show_vinyl:
+            cx = vinyl_rect.centerx
+            cy = vinyl_rect.centery
+            radius = vinyl_rect.width / 2.0
+            if radius >= 8:
+                sheen = self._get_sheen(round(radius * 2))
+                turned = self._pygame.transform.rotate(sheen, -self.angle)
+                self._screen.blit(
+                    turned,
+                    turned.get_rect(center=(round(cx), round(cy))),
+                    special_flags=self._pygame.BLEND_RGB_ADD,
+                )
+
         # Shadow and artwork under the case.
         self._draw_shadow(window)
         cover = self._get_cover(art_width, art_height, state)
         if cover is not None:
             # Clip artwork to the window bounds, drawn at full opacity.
+            # This covers any sheen that may have extended into this area.
             previous = self._screen.get_clip()
             self._screen.set_clip(window.clip(self._screen.get_rect()))
             try:
-                # Blit at full opacity (no special flags)
+                # Blit at full opacity (no special flags) - covers everything beneath it
                 self._screen.blit(cover, window)
-            finally:
-                self._screen.set_clip(previous)
-
-        # Disc motion (spinning sheen) - clipped to vinyl area only.
-        if vinyl is not None and display.show_vinyl:
-            # Clip to vinyl rect so sheen doesn't show on artwork
-            previous = self._screen.get_clip()
-            self._screen.set_clip(vinyl_rect.clip(self._screen.get_rect()))
-            try:
-                cx = vinyl_rect.centerx
-                cy = vinyl_rect.centery
-                radius = vinyl_rect.width / 2.0
-                if radius >= 8:
-                    sheen = self._get_sheen(round(radius * 2))
-                    turned = self._pygame.transform.rotate(sheen, -self.angle)
-                    self._screen.blit(
-                        turned,
-                        turned.get_rect(center=(round(cx), round(cy))),
-                        special_flags=self._pygame.BLEND_RGB_ADD,
-                    )
             finally:
                 self._screen.set_clip(previous)
 

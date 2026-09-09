@@ -90,38 +90,32 @@ function applyFonts(fonts) {
 function applyGeometry(geometry, display) {
   const root = document.documentElement.style;
   const g = geometry;
-  const [W, H] = g.image_size;
+  const [compW, compH] = g.image_size;
 
-  // Work in the artwork's own pixels throughout. The fractions are normalised
-  // against different axes -- the disc's radius against the width, its centre
-  // against the height -- so mixing them silently misplaces things.
-  const right = display.show_vinyl ? g.disc_edge : g.sleeve_right;
-  const compW = (right - g.cover_left) * W;
-  const compH = (g.cover_bottom - g.cover_top) * H;
-
+  // New component-based layout: case, vinyl, and artwork positioned independently.
+  // Composition is square (600x600, scaled by COMPONENT_SCALE).
   root.setProperty("--art-aspect", String(compW / compH));
 
-  const coverW = g.art_window[2] * W;
-  root.setProperty("--cover-width", pct(coverW / compW));
-  // clip-path percentages resolve against the element's own box, not its
-  // container, so this one is a fraction of the cover rather than the frame.
-  root.setProperty("--cover-clip", pct(((g.sleeve_right - g.cover_left) * W) / coverW));
-  root.setProperty("--split", pct(g.sleeve_right));
+  // Artwork fills the entire case
+  const artW = g.art_window[2];
+  const artH = g.art_window[3];
+  root.setProperty("--cover-width", pct(artW / compW));
+  root.setProperty("--cover-clip", pct(1.0)); // No clipping needed
+  root.setProperty("--split", pct(1.0)); // Artwork fills entire area
 
-  // The sleeve image, placed so its cover window lands on the composition.
-  root.setProperty("--sleeve-width", pct(W / compW));
-  root.setProperty("--sleeve-left", pct((-g.cover_left * W) / compW));
-  root.setProperty("--sleeve-height", pct(H / compH));
-  root.setProperty("--sleeve-top", pct((-g.cover_top * H) / compH));
+  // Case image fills the composition
+  root.setProperty("--sleeve-width", pct(1.0));
+  root.setProperty("--sleeve-left", pct(0));
+  root.setProperty("--sleeve-height", pct(1.0));
+  root.setProperty("--sleeve-top", pct(0));
 
-  // The sheen covers the record; only the crescent past the jacket shows.
-  const discDiameter = g.disc_radius * 2 * W;
-  const discLeftPx = g.disc_centre[0] * W - g.disc_radius * W;
-  const discTopPx = g.disc_centre[1] * H - g.disc_radius * W;
-  root.setProperty("--disc-left", pct((discLeftPx - g.cover_left * W) / compW));
-  root.setProperty("--disc-size", pct(discDiameter / compW));
-  root.setProperty("--disc-top", pct((discTopPx - g.cover_top * H) / compH));
-  root.setProperty("--crescent", pct((g.sleeve_right * W - discLeftPx) / discDiameter));
+  // Vinyl positioning (centered with offset to right)
+  const vinylW = compW; // Vinyl is scaled to match composition
+  const vinylH = compH;
+  root.setProperty("--disc-left", pct(0));
+  root.setProperty("--disc-size", pct(1.0));
+  root.setProperty("--disc-top", pct(0));
+  root.setProperty("--crescent", pct(1.0)); // Vinyl shows fully behind artwork
 }
 
 function applyDisplay(display) {
@@ -255,9 +249,9 @@ async function start() {
     applyFonts(theme.fonts || {});
     applyGeometry(theme.geometry, theme.display);
     applyDisplay(theme.display);
-    const sleeve = "/api/asset/sleeve.png";
-    ui.jacketImg.src = sleeve;
-    ui.discImg.src = sleeve;
+    // New component-based assets
+    ui.jacketImg.src = "/api/asset/sleeve.png";  // Case/frame
+    ui.discImg.src = "/api/asset/vinyl.png";     // Vinyl record
   } catch (err) {
     console.warn("using default theme", err);
   }

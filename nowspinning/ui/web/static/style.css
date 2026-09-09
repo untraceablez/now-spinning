@@ -135,7 +135,20 @@ body[data-background="artwork"] .wash::after {
 /* Only the wrapper gets inset:0. The jacket IS the image -- giving it inset
    would override the offsets that place its cover window on the composition. */
 .disc-layer { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
-.jacket { z-index: 3; }
+.jacket {
+  z-index: 3;
+  width: 100%;
+  height: 100%;
+  left: 0;
+  top: 0;
+}
+
+#discImg {
+  width: 96.3% !important;
+  height: 96.3% !important;
+  left: 1.8% !important;
+  top: 1.8% !important;
+}
 
 body[data-gloss="off"] .jacket,
 body[data-vinyl="off"] .disc-layer,

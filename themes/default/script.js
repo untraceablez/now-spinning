@@ -133,8 +133,13 @@ function applyDisplay(display) {
 
   ui.stage.dataset.style = display.style || "sleeve";
   const vinylSetting = display.show_vinyl ? "on" : "off";
+  const oldVinyl = ui.body.dataset.vinyl;
   ui.body.dataset.vinyl = vinylSetting;
-  console.log("applyDisplay - show_vinyl:", display.show_vinyl, "-> setting data-vinyl to:", vinylSetting);
+  if (oldVinyl !== vinylSetting) {
+    console.log("applyDisplay - vinyl visibility changed:", oldVinyl, "->", vinylSetting, "show_vinyl:", display.show_vinyl);
+  } else {
+    console.log("applyDisplay - vinyl already", vinylSetting);
+  }
   ui.body.dataset.gloss = display.show_gloss ? "on" : "off";
   ui.body.dataset.shadow = display.show_shadow ? "on" : "off";
   ui.body.dataset.background = display.background_mode || "solid";
@@ -194,6 +199,8 @@ function render(state) {
   ui.stage.dataset.status = state.status;
 
   const display = (theme && theme.display) || {};
+  console.log("render() called with state:", { status: state.status, hasTrack: !!track, display });
+
   const heading =
     track && display.heading_text ? display.heading_text : HEADINGS[state.status] || "Ready";
   ui.heading.textContent = heading;

@@ -115,6 +115,7 @@ body[data-background="artwork"] .wash::after {
   width: var(--cover-width);
   object-fit: cover;
   clip-path: inset(0 calc(100% - var(--cover-clip)) 0 0);
+  z-index: 2;
 }
 
 .cover[hidden] { display: none; }
@@ -134,7 +135,8 @@ body[data-background="artwork"] .wash::after {
 
 /* Only the wrapper gets inset:0. The jacket IS the image -- giving it inset
    would override the offsets that place its cover window on the composition. */
-.disc-layer { position: absolute; inset: 0; pointer-events: none; }
+.disc-layer { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
+.jacket { z-index: 3; }
 
 body[data-gloss="off"] .jacket,
 body[data-vinyl="off"] .disc-layer,

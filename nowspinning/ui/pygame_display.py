@@ -448,7 +448,7 @@ class PygameDisplay:
             self._draw_record(box.center, min(box.width, box.height), state)
             return None
 
-        vinyl = self._get_vinyl(box.height) if display.show_vinyl else None
+        vinyl = self._get_vinyl(box.width, box.height) if display.show_vinyl else None
 
         # Composition size matches case.
         case_w, case_h = case.get_size()
@@ -483,7 +483,13 @@ class PygameDisplay:
         self._draw_shadow(window)
         cover = self._get_cover(art_width, art_height, state)
         if cover is not None:
-            self._screen.blit(cover, window)
+            # Clip artwork to the window bounds.
+            previous = self._screen.get_clip()
+            self._screen.set_clip(window.clip(self._screen.get_rect()))
+            try:
+                self._screen.blit(cover, window)
+            finally:
+                self._screen.set_clip(previous)
 
         # Case on top (with gloss if enabled).
         if display.show_gloss:
@@ -698,9 +704,9 @@ class PygameDisplay:
         self._case_cache[key] = scaled
         return scaled
 
-    def _get_vinyl(self, max_height: int) -> Any:
-        """The vinyl record, scaled to fit the height."""
-        key = max_height
+    def _get_vinyl(self, max_width: int, max_height: int) -> Any:
+        """The vinyl record, scaled to match case dimensions."""
+        key = (max_width, max_height)
         cached = self._vinyl_cache.get(key)
         if cached is not None:
             return cached
@@ -713,9 +719,10 @@ class PygameDisplay:
         with contextlib.suppress(pygame.error):
             image = image.convert_alpha()
 
-        # Scale to fit the vinyl within the box.
+        # Scale to match case scaling (use same scale factor).
         vinyl_w, vinyl_h = geometry.VINYL_SIZE
-        scale = max_height / vinyl_h
+        case_w, case_h = geometry.CASE_SIZE
+        scale = min(max_width / case_w, max_height / case_h)
         size = (max(1, round(vinyl_w * scale)), max(1, round(vinyl_h * scale)))
         scaled = pygame.transform.smoothscale(image, size)
         self._vinyl_cache[key] = scaled

@@ -74,11 +74,13 @@ python3 -m venv .venv
 Extras: `[pygame]` for the framebuffer display, `[web]` for the browser display,
 `[all]` for both.
 
-> **Boot to a console, not a desktop.** The display draws straight to the
-> framebuffer through KMS/DRM, and a desktop compositor holds that device
-> exclusively — SSHing in does not change that. `sudo raspi-config` → System
-> Options → Boot / Auto Login → **Console Autologin**. Running inside a desktop
-> session works too, but only from inside it, not over SSH.
+> **Desktop or console?** The display can run in either:
+> - **Desktop (easy autostart):** Run via `systemd/now-spinning.desktop` in `~/.config/autostart/` — the
+>   app launches when you log in. This is the recommended path for Raspberry Pi OS Desktop.
+> - **Console (headless):** Boot to console (`sudo raspi-config` → System Options → Boot / Auto Login
+>   → **Console Autologin**), then use the systemd service for autostart. This is better for a
+>   wall-mounted display with no keyboard or mouse. SSHing in does not run the display unless
+>   you run it explicitly — the systemd service takes over at boot instead.
 
 ## First run
 
@@ -322,10 +324,29 @@ signal integrity. The overlay's own default is 24 MHz and not every board or
 ribbon manages it — drop to `speed=16000000`, and lower again if needed. Suspect
 a genuine colour-order problem only once a slower clock has been ruled out.
 
-## Running as a service
+## Auto-start on boot
 
-The unit expects the checkout at `/opt/now-spinning`, which is the tidier place
-for something that runs at boot:
+### On Raspberry Pi OS Desktop
+
+For a desktop environment, copy the `.desktop` file to autostart:
+
+```bash
+mkdir -p ~/.config/autostart
+cp systemd/now-spinning.desktop ~/.config/autostart/
+```
+
+Edit it if your checkout is not at `/home/pi/now-spinning`:
+
+```bash
+nano ~/.config/autostart/now-spinning.desktop
+```
+
+Update the `Exec=` line with your actual path. The app will launch automatically
+when you log in.
+
+### As a system service (headless / console boot)
+
+For a Pi that boots to a console, use systemd. The service expects the checkout at `/opt/now-spinning`:
 
 ```bash
 sudo mv ~/now-spinning /opt/now-spinning
@@ -337,8 +358,7 @@ sudo systemctl enable --now now-spinning
 journalctl -u now-spinning -f
 ```
 
-**To leave the checkout where it is** — in your home directory, say — override
-the paths instead of moving anything:
+**To leave the checkout where it is**, override the paths:
 
 ```bash
 sudo systemctl edit now-spinning
@@ -355,9 +375,9 @@ ProtectHome=
 `ExecStart=` has to be cleared before being set again or systemd appends to it,
 and `ProtectHome=` has to be cleared or the unit cannot read its own venv.
 
-The unit sets `SDL_VIDEODRIVER=kmsdrm`, so the Pi has to boot to a console — see
-the note under [Install](#install). It also points `XDG_CACHE_HOME` at a
-directory systemd creates for it, because cover art and downloaded fonts would
+The service sets `SDL_VIDEODRIVER=kmsdrm` and requires the Pi to boot to a
+console — see the note under [Install](#install). It also points `XDG_CACHE_HOME`
+at a directory systemd creates for it, because cover art and downloaded fonts would
 otherwise land in `~/.cache`, which `ProtectHome=read-only` makes unwritable.
 
 ## Troubleshooting

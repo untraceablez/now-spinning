@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Now Spinning
+Comment=Record player display showing now playing track
+Exec=bash -c 'cd /home/pi/now-spinning && .venv/bin/now-spinning run --backend both'
+Terminal=false
+StartupNotify=false
+Categories=Utility;
+OnlyShowIn=XFCE;LXDE;

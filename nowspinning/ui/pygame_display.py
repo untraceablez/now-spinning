@@ -696,9 +696,9 @@ class PygameDisplay:
         with contextlib.suppress(pygame.error):
             image = image.convert_alpha()
 
-        # Scale to fit the case within the box.
+        # Scale to fit the case within the box, reduced by component scale.
         case_w, case_h = geometry.CASE_SIZE
-        scale = min(max_width / case_w, max_height / case_h)
+        scale = min(max_width / case_w, max_height / case_h) * geometry.COMPONENT_SCALE
         size = (max(1, round(case_w * scale)), max(1, round(case_h * scale)))
         scaled = pygame.transform.smoothscale(image, size)
         self._case_cache[key] = scaled
@@ -719,10 +719,10 @@ class PygameDisplay:
         with contextlib.suppress(pygame.error):
             image = image.convert_alpha()
 
-        # Scale to match case scaling (use same scale factor).
+        # Scale to match case scaling (use same scale factor), reduced by component scale.
         vinyl_w, vinyl_h = geometry.VINYL_SIZE
         case_w, case_h = geometry.CASE_SIZE
-        scale = min(max_width / case_w, max_height / case_h)
+        scale = min(max_width / case_w, max_height / case_h) * geometry.COMPONENT_SCALE
         size = (max(1, round(vinyl_w * scale)), max(1, round(vinyl_h * scale)))
         scaled = pygame.transform.smoothscale(image, size)
         self._vinyl_cache[key] = scaled

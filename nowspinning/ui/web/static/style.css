@@ -144,10 +144,10 @@ body[data-background="artwork"] .wash::after {
 }
 
 #discImg {
-  width: 96.3% !important;
-  height: 96.3% !important;
-  left: 1.8% !important;
-  top: 1.8% !important;
+  width: 100% !important;
+  height: 100% !important;
+  left: 0 !important;
+  top: 0 !important;
 }
 
 body[data-gloss="off"] .jacket,

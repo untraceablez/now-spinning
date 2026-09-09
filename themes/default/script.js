@@ -104,6 +104,9 @@ function applyGeometry(geometry, display) {
   root.setProperty("--sleeve-height", pct(1.0));
   root.setProperty("--sleeve-top", pct(0));
 
+  // Artwork window positioning
+  console.log("applyGeometry:", { artW, artH, compW, compH, coverWidthPct: pct(artW / compW) });
+
   // Vinyl record positioning from geometry
   const discCentre = g.disc_centre;
   const discRadius = g.disc_radius;

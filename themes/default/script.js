@@ -91,31 +91,32 @@ function applyGeometry(geometry, display) {
   const g = geometry;
   const [compW, compH] = g.image_size;
 
-  // New component-based layout: case, vinyl, and artwork positioned independently.
-  // Composition is square (600x600, scaled by COMPONENT_SCALE = 0.95 = 570x570).
   root.setProperty("--art-aspect", String(compW / compH));
 
-  // Artwork fills the entire case (600x600 in case space)
   const artW = g.art_window[2];
   const artH = g.art_window[3];
   root.setProperty("--cover-width", pct(artW / compW));
-  root.setProperty("--cover-clip", pct(1.0)); // No clipping
-  root.setProperty("--split", pct(0)); // Show full vinyl
+  root.setProperty("--cover-clip", pct(1.0));
+  root.setProperty("--split", pct(0));
 
-  // Case image (sleeve.png) fills the composition
   root.setProperty("--sleeve-width", pct(1.0));
   root.setProperty("--sleeve-left", pct(0));
   root.setProperty("--sleeve-height", pct(1.0));
   root.setProperty("--sleeve-top", pct(0));
 
-  // Vinyl record positioning: offset within composition
-  // Use disc_centre from geometry for proper positioning
+  // Vinyl record positioning from geometry
   const discCentre = g.disc_centre;
   const discRadius = g.disc_radius;
-  root.setProperty("--disc-left", pct(Math.max(0, discCentre[0] - discRadius)));
-  root.setProperty("--disc-size", pct(discRadius * 2));
-  root.setProperty("--disc-top", pct(Math.max(0, discCentre[1] - discRadius)));
-  root.setProperty("--crescent", pct(1.0)); // Fully visible (no crescent clipping)
+  const discLeft = Math.max(0, discCentre[0] - discRadius);
+  const discSize = discRadius * 2;
+  const discTop = Math.max(0, discCentre[1] - discRadius);
+
+  root.setProperty("--disc-left", pct(discLeft));
+  root.setProperty("--disc-size", pct(discSize));
+  root.setProperty("--disc-top", pct(discTop));
+  root.setProperty("--crescent", pct(1.0));
+
+  console.log("Geometry applied:", { discCentre, discRadius, discLeft, discSize, discTop });
 }
 
 function applyDisplay(display) {

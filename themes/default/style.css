@@ -150,6 +150,13 @@ body[data-background="artwork"] .wash::after {
   left: var(--disc-left) !important;
   top: var(--disc-top) !important;
   aspect-ratio: 1;
+  transform-origin: center;
+  animation: spin var(--spin-duration) linear infinite;
+  animation-play-state: paused;
+}
+
+.stage[data-status="playing"] #discImg {
+  animation-play-state: running;
 }
 
 body[data-gloss="off"] .jacket,

@@ -81,7 +81,7 @@ body[data-background="artwork"] .wash::after {
 .stage {
   height: 100%;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+  grid-template-columns: minmax(0, 1fr) minmax(20rem, 1.05fr);
   align-items: center;
   gap: clamp(4rem, 15vw, 10rem);
   padding: clamp(1rem, 4vw, 4rem);
@@ -99,6 +99,7 @@ body[data-background="artwork"] .wash::after {
   position: relative;
   width: min(100%, calc((100vh - 2 * clamp(1rem, 4vw, 4rem)) * var(--art-aspect)));
   aspect-ratio: var(--art-aspect);
+  max-width: 80vh;
 }
 
 .stage[data-style="record"] .artwork { display: none; }

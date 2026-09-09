@@ -458,12 +458,19 @@ class PygameDisplay:
         # Position case at composition origin.
         case_rect = case.get_rect(topleft=(composition.x, composition.y))
 
-        # Cover window for artwork clipping.
-        art_left = round(composition.x + geometry.CASE_ART_WINDOW[0])
-        art_top = round(composition.y + geometry.CASE_ART_WINDOW[1])
-        art_width = geometry.CASE_ART_WINDOW[2]
-        art_height = geometry.CASE_ART_WINDOW[3]
-        window = self._pygame.Rect(art_left, art_top, art_width, art_height)
+        # Cover window for artwork clipping, scaled by case size.
+        case_w, case_h = case.get_size()
+        art_x = geometry.CASE_ART_WINDOW[0] / geometry.CASE_SIZE[0]
+        art_y = geometry.CASE_ART_WINDOW[1] / geometry.CASE_SIZE[1]
+        art_w = geometry.CASE_ART_WINDOW[2] / geometry.CASE_SIZE[0]
+        art_h = geometry.CASE_ART_WINDOW[3] / geometry.CASE_SIZE[1]
+
+        window = self._pygame.Rect(
+            round(composition.x + case_w * art_x),
+            round(composition.y + case_h * art_y),
+            round(case_w * art_w),
+            round(case_h * art_h),
+        )
 
         # Draw layers from bottom to top.
         if vinyl is not None:

@@ -1,9 +1,8 @@
 /* Live now-playing client.
  *
- * The page is laid out from /api/theme so it matches the panel: same settings,
- * same fonts, and the same fractions of sleeve.png. Nothing about the
- * composition is duplicated here as a literal -- the server sends the geometry,
- * so the two renderers cannot drift apart.
+ * This theme uses the window.nowSpinning API initialized by the bootstrap page.
+ * The server config (geometry, display, fonts) is passed via window.nowSpinning.config,
+ * and state updates arrive via window.nowSpinning.onStateChange().
  *
  * Everything visual is CSS. This only swaps text, points images at URLs, and
  * sets custom properties, so an idle browser on a Pi is not repainting from
@@ -229,38 +228,44 @@ function connect() {
   };
   source.onmessage = (event) => {
     try {
-      render(JSON.parse(event.data));
+      const state = JSON.parse(event.data);
+      // Update both the theme and the nowSpinning API
+      window.nowSpinning._fireStateChange(state);
+      render(state);
     } catch (err) {
       console.error("bad state payload", err);
     }
   };
   source.onerror = () => {
-    // EventSource retries on its own; the banner just tells whoever is looking
-    // at the wall display that the screen has gone stale.
     ui.connection.hidden = false;
   };
 }
 
-async function start() {
-  try {
-    const response = await fetch("/api/theme");
-    theme = await response.json();
-    applyFonts(theme.fonts || {});
-    applyGeometry(theme.geometry, theme.display);
-    applyDisplay(theme.display);
-    // New component-based assets
-    ui.jacketImg.src = "/api/asset/sleeve.png";  // Case/frame
-    ui.discImg.src = "/api/asset/vinyl.png";     // Vinyl record
-  } catch (err) {
-    console.warn("using default theme", err);
-  }
-  try {
-    const response = await fetch("/api/now-playing");
-    render(await response.json());
-  } catch (err) {
-    console.warn("no initial state", err);
-  }
+function start() {
+  // Config is already loaded by bootstrap and available in window.nowSpinning.config
+  const config = window.nowSpinning.config;
+
+  // Apply theme configuration
+  if (config.fonts) applyFonts(config.fonts);
+  if (config.geometry) applyGeometry(config.geometry, config.display);
+  if (config.display) applyDisplay(config.display);
+
+  // Load component assets (case and vinyl)
+  ui.jacketImg.src = "/api/asset/sleeve.png";
+  ui.discImg.src = "/api/asset/vinyl.png";
+
+  // Subscribe to state changes via the nowSpinning API
+  window.nowSpinning.onStateChange((state) => {
+    render(state);
+  });
+
+  // Connect to SSE stream for live updates
   connect();
 }
 
-start();
+// Start when the DOM is ready
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", start);
+} else {
+  start();
+}

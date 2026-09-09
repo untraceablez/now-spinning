@@ -93,29 +93,28 @@ function applyGeometry(geometry, display) {
   const [compW, compH] = g.image_size;
 
   // New component-based layout: case, vinyl, and artwork positioned independently.
-  // Composition is square (600x600, scaled by COMPONENT_SCALE).
+  // Composition is square (600x600, scaled by COMPONENT_SCALE = 0.95 = 570x570).
   root.setProperty("--art-aspect", String(compW / compH));
 
-  // Artwork fills the entire case
+  // Artwork fills the entire case (600x600 in case space)
   const artW = g.art_window[2];
   const artH = g.art_window[3];
   root.setProperty("--cover-width", pct(artW / compW));
-  root.setProperty("--cover-clip", pct(1.0)); // No clipping needed
-  root.setProperty("--split", pct(0)); // Show full vinyl (no split in new layout)
+  root.setProperty("--cover-clip", pct(1.0)); // No clipping
+  root.setProperty("--split", pct(0)); // Show full vinyl
 
-  // Case image fills the composition
+  // Case image (sleeve.png) fills the composition
   root.setProperty("--sleeve-width", pct(1.0));
   root.setProperty("--sleeve-left", pct(0));
   root.setProperty("--sleeve-height", pct(1.0));
   root.setProperty("--sleeve-top", pct(0));
 
-  // Vinyl positioning (centered with offset to right)
-  const vinylW = compW; // Vinyl is scaled to match composition
-  const vinylH = compH;
+  // Vinyl (vinyl.png) positioned behind case
+  // Vinyl is 578x578 in a 600x600 composition, offset to the right
   root.setProperty("--disc-left", pct(0));
-  root.setProperty("--disc-size", pct(1.0));
+  root.setProperty("--disc-size", pct(1.0)); // Full size within composition
   root.setProperty("--disc-top", pct(0));
-  root.setProperty("--crescent", pct(1.0)); // Vinyl shows fully behind artwork
+  root.setProperty("--crescent", pct(1.0)); // Fully visible (no crescent clipping)
 }
 
 function applyDisplay(display) {

@@ -491,13 +491,13 @@ class PygameDisplay:
             finally:
                 self._screen.set_clip(previous)
 
+        # Vinyl disc motion (spinning effect) - before case so it doesn't show on artwork.
+        if vinyl is not None and display.show_vinyl:
+            self._draw_disc_motion_clipped(vinyl_rect, case_rect)
+
         # Case on top (with gloss if enabled).
         if display.show_gloss:
             self._screen.blit(case, case_rect)
-
-        # Vinyl disc motion (spinning effect).
-        if vinyl is not None and display.show_vinyl:
-            self._draw_disc_motion(vinyl_rect)
 
         return composition
 
@@ -610,6 +610,39 @@ class PygameDisplay:
         self._sheen = surface
         self._sheen_size = diameter
         return surface
+
+    def _draw_disc_motion_clipped(self, vinyl_rect: Any, case_rect: Any) -> None:
+        """Draw disc motion only where vinyl protrudes past the case.
+
+        Clips the sheen to the area outside the case bounds.
+        """
+        pygame = self._pygame
+        # Only show sheen in the area outside the case rectangle
+        cx = vinyl_rect.centerx
+        cy = vinyl_rect.centery
+        radius = vinyl_rect.width / 2.0
+        if radius < 8:
+            return
+
+        # Clip to area outside case (right and bottom edges where vinyl shows)
+        previous = self._screen.get_clip()
+        try:
+            # Create clip region: everything except the case area
+            screen_rect = self._screen.get_rect()
+            case_area = case_rect.clip(screen_rect)
+
+            # Draw sheen with full clipping to protect the case area
+            self._screen.set_clip(vinyl_rect.clip(screen_rect))
+
+            sheen = self._get_sheen(round(radius * 2))
+            turned = pygame.transform.rotate(sheen, -self.angle)
+            self._screen.blit(
+                turned,
+                turned.get_rect(center=(round(cx), round(cy))),
+                special_flags=pygame.BLEND_RGB_ADD,
+            )
+        finally:
+            self._screen.set_clip(previous)
 
     def _draw_disc_motion(self, vinyl_rect: Any) -> None:
         """Add a spinning sheen to the vinyl record.

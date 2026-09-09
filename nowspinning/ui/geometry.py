@@ -28,10 +28,10 @@ COMPOSITION_SIZE = (600, 600)
 #: Position of each component within the composition (in pixels).
 CASE_POS = (0, 0)  # Top-left of the case
 #: Vinyl offset to the right with slight top offset
-VINYL_POS = (80, 11)  # Offset ~80px right for positioning
+VINYL_POS = (120, 11)  # Offset ~120px right for positioning
 
-#: Scale factor applied to all components (10% reduction for padding).
-COMPONENT_SCALE = 0.9
+#: Scale factor applied to all components (5% reduction for padding).
+COMPONENT_SCALE = 0.95
 
 #: Convert to fractions for web layout and other uses
 CASE_LEFT = CASE_POS[0] / COMPOSITION_SIZE[0]

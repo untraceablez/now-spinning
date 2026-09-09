@@ -129,8 +129,8 @@ body[data-background="artwork"] .wash::after {
   pointer-events: none;
 }
 
-.jacket { clip-path: inset(0 calc(100% - var(--split)) 0 0); }
-#discImg { clip-path: inset(0 0 0 var(--split)); }
+.jacket { clip-path: inset(0); } /* Case shows fully in component layout */
+#discImg { clip-path: inset(0); } /* Vinyl shows fully in component layout */
 
 /* Only the wrapper gets inset:0. The jacket IS the image -- giving it inset
    would override the offsets that place its cover window on the composition. */

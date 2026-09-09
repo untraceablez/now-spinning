@@ -209,6 +209,7 @@ function render(state) {
   }
 
   const art = state.artwork || "/api/asset/sleeve-noart.png";
+  console.log("render() - setting artwork:", art);
   if (changed || ui.cover.getAttribute("src") !== art) {
     ui.cover.src = art;
     ui.labelArt.src = art;

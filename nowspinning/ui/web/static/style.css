@@ -112,9 +112,8 @@ body[data-background="artwork"] .wash::after {
   left: 0;
   top: 0;
   height: 100%;
-  width: var(--cover-width);
+  width: 100%;
   object-fit: cover;
-  clip-path: inset(0 calc(100% - var(--cover-clip)) 0 0);
   z-index: 2;
 }
 

@@ -3,6 +3,10 @@
 Useful two ways: as the display itself (Chromium in kiosk mode on a Pi with a
 desktop), and as a second screen -- open it on a phone from the couch while the
 record plays. Both read the same StateStore the pygame renderer does.
+
+Theme support: the browser loads themes dynamically from /api/themes/{name}/.
+Themes are self-contained HTML/CSS/JavaScript applications that consume the
+window.nowSpinning API for state updates.
 """
 
 from __future__ import annotations
@@ -18,6 +22,7 @@ from nowspinning.config import Config
 from nowspinning.fonts import FontLibrary
 from nowspinning.state import NowPlaying, StateStore
 from nowspinning.ui import geometry
+from nowspinning.ui.theme import ThemeLoader
 
 if TYPE_CHECKING:  # pragma: no cover
     from fastapi import FastAPI
@@ -50,9 +55,8 @@ def create_app(config: Config, store: StateStore, artwork: ArtworkCache | None =
         ) from exc
 
     cache = artwork or ArtworkCache(config.cache_dir)
-    # One library for the app's lifetime: it memoises, so a face is resolved --
-    # and downloaded, if it comes to that -- once rather than per request.
     fonts = FontLibrary(config.fonts, config.cache_dir)
+    loader = ThemeLoader()
     app = FastAPI(title="now-spinning", docs_url=None, redoc_url=None)
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
@@ -64,32 +68,69 @@ def create_app(config: Config, store: StateStore, artwork: ArtworkCache | None =
     async def now_playing() -> dict[str, Any]:
         return state_payload(store.snapshot())
 
-    @app.get("/api/theme")
-    async def theme() -> dict[str, Any]:
-        """Everything the page needs to look like the panel does.
+    @app.get("/api/themes", include_in_schema=False)
+    async def list_themes() -> dict[str, list[str]]:
+        return {"themes": loader.list_themes()}
 
-        The whole display config rather than a hand-picked subset, so a setting
-        added later reaches the browser without anyone remembering to widen this.
-        """
+    @app.get("/api/themes/{theme_name}/config", include_in_schema=False)
+    async def theme_config(theme_name: str) -> dict[str, Any]:
+        """Theme config including manifest, server geometry, and display settings."""
+        theme = loader.get_theme(theme_name)
+        if not theme:
+            raise HTTPException(status_code=404, detail="unknown theme")
+
         display = config.display
         return {
-            # Kept flat as well for anything reading the original three.
-            "background": display.background,
-            "foreground": display.foreground,
-            "accent": display.accent,
-            "rpm": display.rpm,
+            "theme_name": theme.name,
+            "manifest": theme.manifest,
+            "geometry": geometry.as_dict(),
             "display": display.model_dump(mode="json"),
             "fonts": {
                 role: getattr(config.fonts, role).model_dump(mode="json")
                 for role in ("heading", "title", "artist", "album")
             },
-            "geometry": geometry.as_dict(),
         }
+
+    @app.get("/api/themes/{theme_name}/index.html", include_in_schema=False)
+    async def theme_html(theme_name: str) -> FileResponse:
+        theme = loader.get_theme(theme_name)
+        if not theme:
+            raise HTTPException(status_code=404, detail="unknown theme")
+        return FileResponse(theme.main_file, media_type="text/html")
+
+    @app.get("/api/themes/{theme_name}/style.css", include_in_schema=False)
+    async def theme_style(theme_name: str) -> FileResponse:
+        theme = loader.get_theme(theme_name)
+        if not theme:
+            raise HTTPException(status_code=404, detail="unknown theme")
+        style_path = theme.file_path("style.css")
+        if not style_path:
+            raise HTTPException(status_code=404, detail="no stylesheet")
+        return FileResponse(style_path, media_type="text/css")
+
+    @app.get("/api/themes/{theme_name}/script.js", include_in_schema=False)
+    async def theme_script(theme_name: str) -> FileResponse:
+        theme = loader.get_theme(theme_name)
+        if not theme:
+            raise HTTPException(status_code=404, detail="unknown theme")
+        script_path = theme.file_path("script.js")
+        if not script_path:
+            raise HTTPException(status_code=404, detail="no script")
+        return FileResponse(script_path, media_type="application/javascript")
+
+    @app.get("/api/themes/{theme_name}/assets/{filename}", include_in_schema=False)
+    async def theme_asset(theme_name: str, filename: str) -> FileResponse:
+        theme = loader.get_theme(theme_name)
+        if not theme:
+            raise HTTPException(status_code=404, detail="unknown theme")
+        asset_path = theme.asset_path(filename)
+        if not asset_path:
+            raise HTTPException(status_code=404, detail="unknown asset")
+        return FileResponse(asset_path)
 
     @app.get("/api/asset/{name}", include_in_schema=False)
     async def asset(name: str) -> FileResponse:
-        """The sleeve artwork, so the page composites the same image."""
-        # Basename only: a name with a path in it must not walk out of assets/.
+        """Legacy: the sleeve artwork components used by themes."""
         path = geometry.ASSETS / Path(name).name
         if path.suffix != ".png" or not path.is_file():
             raise HTTPException(status_code=404, detail="unknown asset")
@@ -97,19 +138,11 @@ def create_app(config: Config, store: StateStore, artwork: ArtworkCache | None =
 
     @app.get("/api/font/{role}", include_in_schema=False)
     async def font(role: str) -> FileResponse:
-        """The very font file the panel is using, so the two match.
-
-        Served from the local cache rather than linking Google Fonts, because the
-        browser on a wall-mounted tablet may have no route out.
-        """
+        """The very font file the panel is using, so the two match."""
         if role not in ("heading", "title", "artist", "album"):
             raise HTTPException(status_code=404, detail="unknown role")
-        # resolve() may reach the network on a cold cache, and it is synchronous.
-        # Off the event loop, or the first request for a font stalls every other
-        # response -- including the live stream -- for the download's timeout.
         path = await asyncio.to_thread(fonts.resolve, getattr(config.fonts, role))
         if path is None:
-            # No file to serve: the page falls back to its own font stack.
             raise HTTPException(status_code=404, detail="no font file for that role")
         return FileResponse(path, media_type="font/ttf")
 

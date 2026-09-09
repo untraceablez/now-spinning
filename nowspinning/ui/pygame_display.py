@@ -339,7 +339,7 @@ class PygameDisplay:
                 # Measure the gap from where the artwork actually ends. The image
                 # keeps its own proportions inside the box, so a fraction of the
                 # panel width would sometimes leave the text touching the disc.
-                text_left = drawn.right + int(width * 0.05)
+                text_left = drawn.right + int(width * 0.08)
                 text_rect = (text_left, 0, max(1, width - text_left - int(width * 0.05)), height)
         else:
             self._draw_record(centre, diameter, state)

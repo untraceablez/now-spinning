@@ -145,10 +145,10 @@ body[data-background="artwork"] .wash::after {
 
 #discImg {
   position: absolute;
-  width: var(--disc-size);
-  height: var(--disc-size);
-  left: var(--disc-left);
-  top: var(--disc-top);
+  width: var(--disc-size) !important;
+  height: var(--disc-size) !important;
+  left: var(--disc-left) !important;
+  top: var(--disc-top) !important;
   aspect-ratio: 1;
 }
 

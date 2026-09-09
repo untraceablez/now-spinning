@@ -256,6 +256,12 @@ function start() {
   ui.jacketImg.src = "/api/asset/sleeve.png";
   ui.discImg.src = "/api/asset/vinyl.png";
 
+  // Fetch initial state and render
+  fetch("/api/now-playing")
+    .then((resp) => resp.json())
+    .then((state) => render(state))
+    .catch((err) => console.error("Failed to fetch initial state:", err));
+
   // Subscribe to state changes via the nowSpinning API
   window.nowSpinning.onStateChange((state) => {
     render(state);

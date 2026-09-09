@@ -101,7 +101,7 @@ function applyGeometry(geometry, display) {
   const artH = g.art_window[3];
   root.setProperty("--cover-width", pct(artW / compW));
   root.setProperty("--cover-clip", pct(1.0)); // No clipping needed
-  root.setProperty("--split", pct(1.0)); // Artwork fills entire area
+  root.setProperty("--split", pct(0)); // Show full vinyl (no split in new layout)
 
   // Case image fills the composition
   root.setProperty("--sleeve-width", pct(1.0));

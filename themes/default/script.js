@@ -93,9 +93,11 @@ function applyGeometry(geometry, display) {
 
   root.setProperty("--art-aspect", String(compW / compH));
 
-  const artW = g.art_window[2];
-  const artH = g.art_window[3];
-  root.setProperty("--cover-width", pct(artW / compW));
+  // Artwork window: g.art_window contains fractions, not pixels
+  // [left_fraction, top_fraction, width_fraction, height_fraction]
+  const artWidthFraction = g.art_window[2];
+  const artHeightFraction = g.art_window[3];
+  root.setProperty("--cover-width", pct(artWidthFraction));
   root.setProperty("--cover-clip", pct(1.0));
   root.setProperty("--split", pct(0));
 
@@ -103,9 +105,6 @@ function applyGeometry(geometry, display) {
   root.setProperty("--sleeve-left", pct(0));
   root.setProperty("--sleeve-height", pct(1.0));
   root.setProperty("--sleeve-top", pct(0));
-
-  // Artwork window positioning
-  console.log("applyGeometry:", { artW, artH, compW, compH, coverWidthPct: pct(artW / compW) });
 
   // Vinyl record positioning from geometry
   const discCentre = g.disc_centre;

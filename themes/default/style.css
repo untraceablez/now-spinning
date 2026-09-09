@@ -83,7 +83,7 @@ body[data-background="artwork"] .wash::after {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
   align-items: center;
-  gap: clamp(3rem, 12vw, 8rem);
+  gap: clamp(4rem, 15vw, 10rem);
   padding: clamp(1rem, 4vw, 4rem);
 }
 

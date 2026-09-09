@@ -1,11 +1,11 @@
-"""Where things sit inside the sleeve artwork.
+"""Where things sit in the record display composition.
 
-Every value is a fraction of ``sleeve.png``, so it holds at any size. They live
-here rather than in the pygame renderer because the web page lays out the same
-composition and has to agree with it exactly -- and because importing the pygame
-renderer to read a number would drag SDL into a web-only install.
+The display uses separate component assets (case, tab, vinyl) rather than a
+composite, and lays them out as layers. The geometry here positions them
+relative to the composition's origin.
 
-All of it is measured from the asset rather than eyeballed; the comments say how.
+All positioning is in pixels or as fractions of the composition size, measured
+from the assets rather than eyeballed.
 """
 
 from __future__ import annotations
@@ -14,40 +14,74 @@ from pathlib import Path
 
 ASSETS = Path(__file__).with_name("assets")
 
-#: The cover's window inside sleeve.png: x, y, width, height. From the original
-#: theme's stylesheet -- a 355x355 window at (27, 14) in a 453x387 sheet, which
-#: is why the artwork reads as square despite the sleeve being taller than wide.
-ART_WINDOW = (27 / 453, 14 / 387, 355 / 453, 355 / 387)
+#: The cover's window inside the case: x, y, width, height (in pixels).
+#: Measured from case.png (600x600): the artwork display area.
+CASE_SIZE = (600, 600)
+CASE_ART_WINDOW = (80, 80, 440, 440)  # x, y, width, height in pixels
 
-#: The record, fitted from the artwork's opaque pixels: centre (274.2, 194.0)
-#: and radius 172.6, which reproduces every measured column to within a pixel.
-DISC_CENTRE = (274.2 / 453, 194.0 / 387)
-DISC_RADIUS = 172.6 / 453
+#: The vinyl record and tab dimensions (in pixels).
+VINYL_SIZE = (578, 578)
+TAB_SIZE = (33, 578)
 
-#: Where the jacket ends and the record begins. Everything left of it is jacket,
-#: everything right is record, which is what lets the two be drawn -- or not --
-#: independently. It is also the left edge of the visible crescent of record.
-SLEEVE_RIGHT = 377 / 453
+#: The composition bounds: how much space is needed to draw all components.
+#: Width: case (600) + tab (33) = 633
+#: Height: case (600) + vinyl overhang (11) = 611 (vinyl is 578, positioned
+#: to align with case width, leaving room to show below the case)
+COMPOSITION_SIZE = (633, 611)
 
-#: The composition to centre and scale by: the cover, plus the record when it is
-#: shown. Deliberately not the image's alpha bounds -- the jacket's shadow used
-#: to reach further left than right, which pulled the cover off centre.
-COVER_LEFT = ART_WINDOW[0]
-COVER_TOP = ART_WINDOW[1]
-COVER_RIGHT = ART_WINDOW[0] + ART_WINDOW[2]
-COVER_BOTTOM = ART_WINDOW[1] + ART_WINDOW[3]
-DISC_EDGE = DISC_CENTRE[0] + DISC_RADIUS
+#: Position of each component within the composition (in pixels).
+CASE_POS = (0, 0)  # Top-left of the case
+TAB_POS = (600, 11)  # To the right of case, aligned with vinyl center
+VINYL_POS = (27.5, 33)  # Centered under the case, with overhang at bottom
 
-#: Breathing room left around the artwork when it has the panel to itself, as a
-#: fraction of the shorter side. Enough to not look cropped.
+#: Convert to fractions for web layout and other uses
+CASE_LEFT = CASE_POS[0] / COMPOSITION_SIZE[0]
+CASE_TOP = CASE_POS[1] / COMPOSITION_SIZE[1]
+CASE_RIGHT = (CASE_POS[0] + CASE_SIZE[0]) / COMPOSITION_SIZE[0]
+CASE_BOTTOM = (CASE_POS[1] + CASE_SIZE[1]) / COMPOSITION_SIZE[1]
+
+TAB_LEFT = TAB_POS[0] / COMPOSITION_SIZE[0]
+TAB_TOP = TAB_POS[1] / COMPOSITION_SIZE[1]
+TAB_RIGHT = (TAB_POS[0] + TAB_SIZE[0]) / COMPOSITION_SIZE[0]
+TAB_BOTTOM = (TAB_POS[1] + TAB_SIZE[1]) / COMPOSITION_SIZE[1]
+
+VINYL_LEFT = VINYL_POS[0] / COMPOSITION_SIZE[0]
+VINYL_TOP = VINYL_POS[1] / COMPOSITION_SIZE[1]
+VINYL_RIGHT = (VINYL_POS[0] + VINYL_SIZE[0]) / COMPOSITION_SIZE[0]
+VINYL_BOTTOM = (VINYL_POS[1] + VINYL_SIZE[1]) / COMPOSITION_SIZE[1]
+
+#: Cover window bounds (derived from case window, in fractions of composition).
+ART_WINDOW_LEFT = CASE_ART_WINDOW[0] / COMPOSITION_SIZE[0]
+ART_WINDOW_TOP = CASE_ART_WINDOW[1] / COMPOSITION_SIZE[1]
+ART_WINDOW_WIDTH = CASE_ART_WINDOW[2] / COMPOSITION_SIZE[0]
+ART_WINDOW_HEIGHT = CASE_ART_WINDOW[3] / COMPOSITION_SIZE[1]
+ART_WINDOW = (ART_WINDOW_LEFT, ART_WINDOW_TOP, ART_WINDOW_WIDTH, ART_WINDOW_HEIGHT)
+
+#: Vinyl disc center and radius (in fractions of composition).
+#: The vinyl is a 578x578 circle centered at (289, 289) in its own space.
+VINYL_CENTER_X = (VINYL_POS[0] + VINYL_SIZE[0] / 2) / COMPOSITION_SIZE[0]
+VINYL_CENTER_Y = (VINYL_POS[1] + VINYL_SIZE[1] / 2) / COMPOSITION_SIZE[1]
+VINYL_RADIUS = (VINYL_SIZE[0] / 2) / COMPOSITION_SIZE[0]
+DISC_CENTRE = (VINYL_CENTER_X, VINYL_CENTER_Y)
+DISC_RADIUS = VINYL_RADIUS
+
+#: For compatibility with web layout.
+COVER_LEFT = ART_WINDOW_LEFT
+COVER_TOP = ART_WINDOW_TOP
+COVER_RIGHT = ART_WINDOW_LEFT + ART_WINDOW_WIDTH
+COVER_BOTTOM = ART_WINDOW_TOP + ART_WINDOW_HEIGHT
+
+#: The point where the case ends (for potential future clipping).
+SLEEVE_RIGHT = CASE_RIGHT
+
+#: The rightmost edge when vinyl is shown (case + tab).
+DISC_EDGE = TAB_RIGHT
+
+#: Breathing room around artwork when displayed alone.
 ARTWORK_ONLY_MARGIN = 0.04
 
-
-#: The artwork's own pixel size. The browser needs it because the fractions above
-#: are normalised against different axes -- DISC_RADIUS against the width, the
-#: disc's centre y against the height -- and mixing the two silently misplaces
-#: things. Working in these pixels and converting once is unambiguous.
-IMAGE_SIZE = (453, 387)
+#: The composition's pixel size (used for scaling).
+IMAGE_SIZE = COMPOSITION_SIZE
 
 
 def as_dict() -> dict[str, object]:

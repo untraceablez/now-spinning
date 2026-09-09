@@ -139,6 +139,9 @@ class PygameDisplay:
         self._platter: Any = None
         self._label_cache: dict[str, Any] = {}
         self._sleeve_cache: dict[tuple[int, int, float], Any] = {}
+        self._case_cache: dict[tuple[int, int], Any] = {}
+        self._tab_cache: dict[int, Any] = {}
+        self._vinyl_cache: dict[int, Any] = {}
         self._cover_cache: dict[tuple[str, int, int], Any] = {}
         self._background_cache: dict[tuple[Any, ...], Any] = {}
         self._shadow_cache: dict[tuple[Any, ...], Any] = {}
@@ -433,59 +436,69 @@ class PygameDisplay:
     # -- sleeve ----------------------------------------------------------
 
     def _draw_sleeve(self, box: Any, state: NowPlaying) -> Any:
-        """Cover art in a record sleeve, disc protruding, after the Bowtie theme.
+        """Cover art with a record case and spinning vinyl underneath.
 
-        Returns the rect the sleeve was drawn into, so the caller can lay text out
-        beside it, or ``None`` if the asset is missing and the record was drawn.
+        Components are layered: vinyl at the bottom, cover art next, case on top,
+        and tab to the right. Returns the composition rect, or None if drawing fails.
         """
         display = self.config.display
-        # With the record hidden there is nothing to the right of the jacket, so
-        # the jacket alone is what has to fit the box -- otherwise the cover
-        # shrinks to leave room for something that is not drawn.
-        # The cover is clipped where the jacket ends, so with the record hidden
-        # that is also where the composition ends.
-        right = DISC_EDGE if display.show_vinyl else SLEEVE_RIGHT
-        sleeve = self._get_sleeve(box.width, box.height, right)
-        if sleeve is None:  # asset missing; fall back rather than show nothing
+
+        # Load all components; if any fail, fall back to a plain record.
+        vinyl = self._get_vinyl(box.height) if display.show_vinyl else None
+        case = self._get_case(box.width, box.height)
+        tab = self._get_tab(box.height) if display.show_vinyl else None
+
+        if case is None:
             self._draw_record(box.center, min(box.width, box.height), state)
             return None
 
-        width, height = sleeve.get_size()
-        left_px, right_px = COVER_LEFT * width, right * width
-        top_px, bottom_px = COVER_TOP * height, COVER_BOTTOM * height
+        # Calculate composition size based on components and what is visible.
+        case_w, case_h = case.get_size()
+        comp_width = case_w + (tab.get_width() if tab else 0)
+        comp_height = case_h + ((vinyl.get_height() - case_h) if vinyl else 0)
 
-        # Round the composition to whole pixels and centre *that*, then place the
-        # image relative to it. Centring the image and rounding afterwards lets
-        # two roundings stack, which lands the artwork a pixel off centre.
-        composition = self._pygame.Rect(0, 0, 0, 0)
-        composition.width = max(1, round(right_px - left_px))
-        composition.height = max(1, round(bottom_px - top_px))
+        composition = self._pygame.Rect(0, 0, comp_width, comp_height)
         composition.center = box.center
-        rect = sleeve.get_rect()
-        rect.x = composition.x - round(left_px)
-        rect.y = composition.y - round(top_px)
 
-        split = rect.x + round(width * SLEEVE_RIGHT)
-        window = self._art_window(rect)
-        # Under everything, including the record: a shadow drawn over the disc
-        # would look like a smudge on the vinyl rather than a shadow beneath it.
+        # Position components within composition (all relative to composition origin).
+        case_rect = case.get_rect(topleft=(0, 0))
+        case_rect.x = composition.x
+        case_rect.y = composition.y
+
+        # Cover window for artwork clipping.
+        art_left = round(composition.x + geometry.CASE_ART_WINDOW[0])
+        art_top = round(composition.y + geometry.CASE_ART_WINDOW[1])
+        art_width = geometry.CASE_ART_WINDOW[2]
+        art_height = geometry.CASE_ART_WINDOW[3]
+        window = self._pygame.Rect(art_left, art_top, art_width, art_height)
+
+        # Draw layers from bottom to top.
+        if vinyl is not None:
+            vinyl_x = composition.x + round(geometry.VINYL_POS[0])
+            vinyl_y = composition.y + round(geometry.VINYL_POS[1])
+            vinyl_rect = vinyl.get_rect(topleft=(vinyl_x, vinyl_y))
+            self._screen.blit(vinyl, vinyl_rect)
+
+        # Shadow and artwork under the case.
         self._draw_shadow(window)
-        cover = self._get_cover(window.width, window.height, state)
+        cover = self._get_cover(art_width, art_height, state)
         if cover is not None:
-            # Clipped to where the jacket ends. The cover window reaches five
-            # pixels further right than the jacket does, and with the record
-            # hidden nothing covers that strip -- it shows as a sliver of
-            # unglossed artwork down the edge.
-            self._blit_clipped(cover, window, window.left, split)
+            self._screen.blit(cover, window)
 
+        # Case on top (with gloss if enabled).
         if display.show_gloss:
-            self._blit_clipped(sleeve, rect, rect.left, split)
-        if display.show_vinyl:
-            self._blit_clipped(sleeve, rect, split, rect.right)
-            self._draw_disc_motion(rect)
+            self._screen.blit(case, case_rect)
 
-        # Report the artwork, so the text column sits beside it rather than
-        # beside the image's transparent margin.
+        # Vinyl disc motion (spinning effect).
+        if vinyl is not None and display.show_vinyl:
+            self._draw_disc_motion(vinyl_rect)
+
+        # Tab to the right.
+        if tab is not None:
+            tab_x = composition.x + round(geometry.TAB_POS[0])
+            tab_y = composition.y + round(geometry.TAB_POS[1])
+            self._screen.blit(tab, (tab_x, tab_y))
+
         return composition
 
     def _draw_shadow(self, window: Any) -> None:
@@ -598,27 +611,26 @@ class PygameDisplay:
         self._sheen_size = diameter
         return surface
 
-    def _draw_disc_motion(self, sleeve_rect: Any) -> None:
-        """Turn the exposed sliver of the disc.
+    def _draw_disc_motion(self, vinyl_rect: Any) -> None:
+        """Add a spinning sheen to the vinyl record.
 
         The record's grooves are concentric, so rotating the artwork shows
         nothing. The motion is a sheen instead: a smooth two-lobed gradient,
-        rotated and added over the crescent the sleeve does not cover, so light
-        sweeps across the grooves the way it does on a real record.
+        rotated and added over the vinyl so light sweeps across the grooves.
         """
         pygame = self._pygame
-        cx = sleeve_rect.x + sleeve_rect.width * DISC_CENTRE[0]
-        cy = sleeve_rect.y + sleeve_rect.height * DISC_CENTRE[1]
-        radius = sleeve_rect.width * DISC_RADIUS
-        edge = sleeve_rect.x + sleeve_rect.width * SLEEVE_RIGHT
-        if radius < 8 or cx + radius <= edge:
+        # Vinyl is a square disc; calculate center and radius.
+        cx = vinyl_rect.centerx
+        cy = vinyl_rect.centery
+        radius = vinyl_rect.width / 2.0
+        if radius < 8:
             return
 
-        crescent = pygame.Rect(
-            round(edge), round(cy - radius), round(cx + radius - edge) + 1, round(radius * 2) + 1
+        disc_area = pygame.Rect(
+            vinyl_rect.left, vinyl_rect.top, vinyl_rect.width, vinyl_rect.height
         )
         previous = self._screen.get_clip()
-        self._screen.set_clip(crescent.clip(self._screen.get_rect()))
+        self._screen.set_clip(disc_area.clip(self._screen.get_rect()))
         try:
             sheen = self._get_sheen(round(radius * 2))
             turned = pygame.transform.rotate(sheen, -self.angle)
@@ -667,6 +679,75 @@ class PygameDisplay:
         size = (max(1, round(image.get_width() * scale)), max(1, round(image.get_height() * scale)))
         scaled = pygame.transform.smoothscale(image, size)
         self._sleeve_cache[key] = scaled
+        return scaled
+
+    def _get_case(self, max_width: int, max_height: int) -> Any:
+        """The record case, scaled to fit the box."""
+        key = (max_width, max_height)
+        cached = self._case_cache.get(key)
+        if cached is not None:
+            return cached
+        pygame = self._pygame
+        try:
+            image = pygame.image.load(str(ASSETS / "sleeve.png"))
+        except Exception as exc:
+            log.warning("could not load case asset: %s", exc)
+            return None
+        with contextlib.suppress(pygame.error):
+            image = image.convert_alpha()
+
+        # Scale to fit the case within the box.
+        case_w, case_h = geometry.CASE_SIZE
+        scale = min(max_width / case_w, max_height / case_h)
+        size = (max(1, round(case_w * scale)), max(1, round(case_h * scale)))
+        scaled = pygame.transform.smoothscale(image, size)
+        self._case_cache[key] = scaled
+        return scaled
+
+    def _get_tab(self, max_height: int) -> Any:
+        """The case tab, scaled to fit the height."""
+        key = max_height
+        cached = self._tab_cache.get(key)
+        if cached is not None:
+            return cached
+        pygame = self._pygame
+        try:
+            image = pygame.image.load(str(ASSETS / "tab.png"))
+        except Exception as exc:
+            log.warning("could not load tab asset: %s", exc)
+            return None
+        with contextlib.suppress(pygame.error):
+            image = image.convert_alpha()
+
+        # Scale to fit the tab height within the box.
+        tab_w, tab_h = geometry.TAB_SIZE
+        scale = max_height / tab_h
+        size = (max(1, round(tab_w * scale)), max(1, round(tab_h * scale)))
+        scaled = pygame.transform.smoothscale(image, size)
+        self._tab_cache[key] = scaled
+        return scaled
+
+    def _get_vinyl(self, max_height: int) -> Any:
+        """The vinyl record, scaled to fit the height."""
+        key = max_height
+        cached = self._vinyl_cache.get(key)
+        if cached is not None:
+            return cached
+        pygame = self._pygame
+        try:
+            image = pygame.image.load(str(ASSETS / "vinyl.png"))
+        except Exception as exc:
+            log.warning("could not load vinyl asset: %s", exc)
+            return None
+        with contextlib.suppress(pygame.error):
+            image = image.convert_alpha()
+
+        # Scale to fit the vinyl within the box.
+        vinyl_w, vinyl_h = geometry.VINYL_SIZE
+        scale = max_height / vinyl_h
+        size = (max(1, round(vinyl_w * scale)), max(1, round(vinyl_h * scale)))
+        scaled = pygame.transform.smoothscale(image, size)
+        self._vinyl_cache[key] = scaled
         return scaled
 
     def _get_cover(self, width: int, height: int, state: NowPlaying) -> Any:

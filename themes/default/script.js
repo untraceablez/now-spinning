@@ -18,6 +18,7 @@ const ui = {
   cover: el("cover"),
   jacketImg: el("jacketImg"),
   discImg: el("discImg"),
+  discLayer: el("discLayer"),
   labelArt: el("labelArt"),
   heading: el("heading"),
   title: el("title"),
@@ -256,6 +257,16 @@ function start() {
   // Load component assets (case and vinyl)
   ui.jacketImg.src = "/api/asset/sleeve.png";
   ui.discImg.src = "/api/asset/vinyl.png";
+
+  console.log("Start function:", {
+    discImgElement: ui.discImg,
+    discImgSrc: ui.discImg?.src,
+    discImgDisplay: ui.discImg ? window.getComputedStyle(ui.discImg).display : "N/A",
+    discImgWidth: ui.discImg ? window.getComputedStyle(ui.discImg).width : "N/A",
+    discImgHeight: ui.discImg ? window.getComputedStyle(ui.discImg).height : "N/A",
+    discLayerDisplay: ui.discLayer ? window.getComputedStyle(ui.discLayer).display : "N/A",
+    bodyDataVinyl: document.body.dataset.vinyl,
+  });
 
   // Subscribe to state changes via the nowSpinning API
   window.nowSpinning.onStateChange((state) => {

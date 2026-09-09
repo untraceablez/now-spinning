@@ -492,6 +492,26 @@ class PygameDisplay:
             finally:
                 self._screen.set_clip(previous)
 
+        # Disc motion (spinning sheen) - clipped to vinyl area only.
+        if vinyl is not None and display.show_vinyl:
+            # Clip to vinyl rect so sheen doesn't show on artwork
+            previous = self._screen.get_clip()
+            self._screen.set_clip(vinyl_rect.clip(self._screen.get_rect()))
+            try:
+                cx = vinyl_rect.centerx
+                cy = vinyl_rect.centery
+                radius = vinyl_rect.width / 2.0
+                if radius >= 8:
+                    sheen = self._get_sheen(round(radius * 2))
+                    turned = self._pygame.transform.rotate(sheen, -self.angle)
+                    self._screen.blit(
+                        turned,
+                        turned.get_rect(center=(round(cx), round(cy))),
+                        special_flags=self._pygame.BLEND_RGB_ADD,
+                    )
+            finally:
+                self._screen.set_clip(previous)
+
         # Case on top (with gloss if enabled).
         if display.show_gloss:
             self._screen.blit(case, case_rect)

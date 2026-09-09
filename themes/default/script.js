@@ -132,7 +132,9 @@ function applyDisplay(display) {
   if (display.rpm) root.setProperty("--spin-duration", `${60 / display.rpm}s`);
 
   ui.stage.dataset.style = display.style || "sleeve";
-  ui.body.dataset.vinyl = display.show_vinyl ? "on" : "off";
+  const vinylSetting = display.show_vinyl ? "on" : "off";
+  ui.body.dataset.vinyl = vinylSetting;
+  console.log("applyDisplay - show_vinyl:", display.show_vinyl, "-> setting data-vinyl to:", vinylSetting);
   ui.body.dataset.gloss = display.show_gloss ? "on" : "off";
   ui.body.dataset.shadow = display.show_shadow ? "on" : "off";
   ui.body.dataset.background = display.background_mode || "solid";

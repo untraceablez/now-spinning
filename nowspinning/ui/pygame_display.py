@@ -483,17 +483,14 @@ class PygameDisplay:
         self._draw_shadow(window)
         cover = self._get_cover(art_width, art_height, state)
         if cover is not None:
-            # Clip artwork to the window bounds.
+            # Clip artwork to the window bounds, drawn at full opacity.
             previous = self._screen.get_clip()
             self._screen.set_clip(window.clip(self._screen.get_rect()))
             try:
+                # Blit at full opacity (no special flags)
                 self._screen.blit(cover, window)
             finally:
                 self._screen.set_clip(previous)
-
-        # Vinyl disc motion (spinning effect) - before case so it doesn't show on artwork.
-        if vinyl is not None and display.show_vinyl:
-            self._draw_disc_motion_clipped(vinyl_rect, case_rect)
 
         # Case on top (with gloss if enabled).
         if display.show_gloss:

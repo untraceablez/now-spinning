@@ -15,9 +15,9 @@ from pathlib import Path
 ASSETS = Path(__file__).with_name("assets")
 
 #: The cover's window inside the case: x, y, width, height (in pixels).
-#: The case has a frame border that shows around the artwork.
+#: Artwork fills the entire case (the case frame is part of the case image).
 CASE_SIZE = (600, 600)
-CASE_ART_WINDOW = (80, 80, 440, 440)  # x, y, width, height in pixels (80px frame)
+CASE_ART_WINDOW = (0, 0, 600, 600)  # x, y, width, height in pixels
 
 #: The vinyl record dimensions (in pixels).
 VINYL_SIZE = (578, 578)

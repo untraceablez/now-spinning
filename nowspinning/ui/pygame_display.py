@@ -462,14 +462,14 @@ class PygameDisplay:
         case_w, case_h = case.get_size()
         art_x = geometry.CASE_ART_WINDOW[0] / geometry.CASE_SIZE[0]
         art_y = geometry.CASE_ART_WINDOW[1] / geometry.CASE_SIZE[1]
-        art_w = geometry.CASE_ART_WINDOW[2] / geometry.CASE_SIZE[0]
-        art_h = geometry.CASE_ART_WINDOW[3] / geometry.CASE_SIZE[1]
+        art_width = round(case_w * (geometry.CASE_ART_WINDOW[2] / geometry.CASE_SIZE[0]))
+        art_height = round(case_h * (geometry.CASE_ART_WINDOW[3] / geometry.CASE_SIZE[1]))
 
         window = self._pygame.Rect(
             round(composition.x + case_w * art_x),
             round(composition.y + case_h * art_y),
-            round(case_w * art_w),
-            round(case_h * art_h),
+            art_width,
+            art_height,
         )
 
         # Draw layers from bottom to top.

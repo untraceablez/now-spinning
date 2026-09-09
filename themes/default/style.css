@@ -150,6 +150,7 @@ body[data-background="artwork"] .wash::after {
   left: var(--disc-left);
   top: var(--disc-top);
   aspect-ratio: 1;
+  border: 2px solid red;
 }
 
 body[data-gloss="off"] .jacket,

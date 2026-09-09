@@ -105,15 +105,14 @@ body[data-background="artwork"] .wash::after {
 .stage[data-style="record"] .artwork { display: none; }
 .stage[data-style="sleeve"] .record { display: none; }
 
-/* The cover fills only the art window, not the entire composition.
-   This allows the vinyl and case to show around the artwork edges. */
+/* The cover fills the artwork container.
+   Position and clip-path control what portion is visible. */
 .cover {
   position: absolute;
   left: 0;
   top: 0;
   height: 100%;
-  width: var(--cover-width);
-  clip-path: inset(0 calc(100% - var(--cover-clip)) 0 0);
+  width: 100%;
   object-fit: cover;
   z-index: 2;
 }

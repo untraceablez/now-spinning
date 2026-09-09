@@ -140,7 +140,6 @@ class PygameDisplay:
         self._label_cache: dict[str, Any] = {}
         self._sleeve_cache: dict[tuple[int, int, float], Any] = {}
         self._case_cache: dict[tuple[int, int], Any] = {}
-        self._tab_cache: dict[int, Any] = {}
         self._vinyl_cache: dict[int, Any] = {}
         self._cover_cache: dict[tuple[str, int, int], Any] = {}
         self._background_cache: dict[tuple[Any, ...], Any] = {}
@@ -438,32 +437,26 @@ class PygameDisplay:
     def _draw_sleeve(self, box: Any, state: NowPlaying) -> Any:
         """Cover art with a record case and spinning vinyl underneath.
 
-        Components are layered: vinyl at the bottom, cover art next, case on top,
-        and tab to the right. Returns the composition rect, or None if drawing fails.
+        Components are layered: vinyl at the bottom, cover art next, case on top.
+        Returns the composition rect, or None if drawing fails.
         """
         display = self.config.display
 
-        # Load all components; if any fail, fall back to a plain record.
-        vinyl = self._get_vinyl(box.height) if display.show_vinyl else None
+        # Load components; if case fails, fall back to a plain record.
         case = self._get_case(box.width, box.height)
-        tab = self._get_tab(box.height) if display.show_vinyl else None
-
         if case is None:
             self._draw_record(box.center, min(box.width, box.height), state)
             return None
 
-        # Calculate composition size based on components and what is visible.
-        case_w, case_h = case.get_size()
-        comp_width = case_w + (tab.get_width() if tab else 0)
-        comp_height = case_h + ((vinyl.get_height() - case_h) if vinyl else 0)
+        vinyl = self._get_vinyl(box.height) if display.show_vinyl else None
 
-        composition = self._pygame.Rect(0, 0, comp_width, comp_height)
+        # Composition size matches case.
+        case_w, case_h = case.get_size()
+        composition = self._pygame.Rect(0, 0, case_w, case_h)
         composition.center = box.center
 
-        # Position components within composition (all relative to composition origin).
-        case_rect = case.get_rect(topleft=(0, 0))
-        case_rect.x = composition.x
-        case_rect.y = composition.y
+        # Position case at composition origin.
+        case_rect = case.get_rect(topleft=(composition.x, composition.y))
 
         # Cover window for artwork clipping.
         art_left = round(composition.x + geometry.CASE_ART_WINDOW[0])
@@ -492,12 +485,6 @@ class PygameDisplay:
         # Vinyl disc motion (spinning effect).
         if vinyl is not None and display.show_vinyl:
             self._draw_disc_motion(vinyl_rect)
-
-        # Tab to the right.
-        if tab is not None:
-            tab_x = composition.x + round(geometry.TAB_POS[0])
-            tab_y = composition.y + round(geometry.TAB_POS[1])
-            self._screen.blit(tab, (tab_x, tab_y))
 
         return composition
 
@@ -702,29 +689,6 @@ class PygameDisplay:
         size = (max(1, round(case_w * scale)), max(1, round(case_h * scale)))
         scaled = pygame.transform.smoothscale(image, size)
         self._case_cache[key] = scaled
-        return scaled
-
-    def _get_tab(self, max_height: int) -> Any:
-        """The case tab, scaled to fit the height."""
-        key = max_height
-        cached = self._tab_cache.get(key)
-        if cached is not None:
-            return cached
-        pygame = self._pygame
-        try:
-            image = pygame.image.load(str(ASSETS / "tab.png"))
-        except Exception as exc:
-            log.warning("could not load tab asset: %s", exc)
-            return None
-        with contextlib.suppress(pygame.error):
-            image = image.convert_alpha()
-
-        # Scale to fit the tab height within the box.
-        tab_w, tab_h = geometry.TAB_SIZE
-        scale = max_height / tab_h
-        size = (max(1, round(tab_w * scale)), max(1, round(tab_h * scale)))
-        scaled = pygame.transform.smoothscale(image, size)
-        self._tab_cache[key] = scaled
         return scaled
 
     def _get_vinyl(self, max_height: int) -> Any:

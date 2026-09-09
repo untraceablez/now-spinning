@@ -19,31 +19,22 @@ ASSETS = Path(__file__).with_name("assets")
 CASE_SIZE = (600, 600)
 CASE_ART_WINDOW = (80, 80, 440, 440)  # x, y, width, height in pixels
 
-#: The vinyl record and tab dimensions (in pixels).
+#: The vinyl record dimensions (in pixels).
 VINYL_SIZE = (578, 578)
-TAB_SIZE = (33, 578)
 
-#: The composition bounds: how much space is needed to draw all components.
-#: Width: case (600) + tab (33) = 633
-#: Height: case (600) + vinyl overhang (11) = 611 (vinyl is 578, positioned
-#: to align with case width, leaving room to show below the case)
-COMPOSITION_SIZE = (633, 611)
+#: The composition bounds: just the case size (no tab).
+COMPOSITION_SIZE = (600, 600)
 
 #: Position of each component within the composition (in pixels).
 CASE_POS = (0, 0)  # Top-left of the case
-TAB_POS = (600, 11)  # To the right of case, aligned with vinyl center
-VINYL_POS = (27.5, 33)  # Centered under the case, with overhang at bottom
+#: Vinyl centered within case, extends on all sides equally
+VINYL_POS = (11, 11)  # Centered: (600-578)/2 = 11 pixels from edges
 
 #: Convert to fractions for web layout and other uses
 CASE_LEFT = CASE_POS[0] / COMPOSITION_SIZE[0]
 CASE_TOP = CASE_POS[1] / COMPOSITION_SIZE[1]
 CASE_RIGHT = (CASE_POS[0] + CASE_SIZE[0]) / COMPOSITION_SIZE[0]
 CASE_BOTTOM = (CASE_POS[1] + CASE_SIZE[1]) / COMPOSITION_SIZE[1]
-
-TAB_LEFT = TAB_POS[0] / COMPOSITION_SIZE[0]
-TAB_TOP = TAB_POS[1] / COMPOSITION_SIZE[1]
-TAB_RIGHT = (TAB_POS[0] + TAB_SIZE[0]) / COMPOSITION_SIZE[0]
-TAB_BOTTOM = (TAB_POS[1] + TAB_SIZE[1]) / COMPOSITION_SIZE[1]
 
 VINYL_LEFT = VINYL_POS[0] / COMPOSITION_SIZE[0]
 VINYL_TOP = VINYL_POS[1] / COMPOSITION_SIZE[1]
@@ -71,11 +62,11 @@ COVER_TOP = ART_WINDOW_TOP
 COVER_RIGHT = ART_WINDOW_LEFT + ART_WINDOW_WIDTH
 COVER_BOTTOM = ART_WINDOW_TOP + ART_WINDOW_HEIGHT
 
-#: The point where the case ends (for potential future clipping).
+#: The point where the case ends.
 SLEEVE_RIGHT = CASE_RIGHT
 
-#: The rightmost edge when vinyl is shown (case + tab).
-DISC_EDGE = TAB_RIGHT
+#: The rightmost edge of the composition (no tab).
+DISC_EDGE = CASE_RIGHT
 
 #: Breathing room around artwork when displayed alone.
 ARTWORK_ONLY_MARGIN = 0.04

@@ -144,10 +144,12 @@ body[data-background="artwork"] .wash::after {
 }
 
 #discImg {
+  position: absolute;
   width: var(--disc-size);
   height: var(--disc-size);
   left: var(--disc-left);
   top: var(--disc-top);
+  aspect-ratio: 1;
 }
 
 body[data-gloss="off"] .jacket,

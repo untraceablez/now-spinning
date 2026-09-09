@@ -1,0 +1,341 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN"
+	"http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
+<head>
+	<meta http-equiv="Content-type" content="text/html; charset=utf-8" />
+	<title>Pixl</title>
+	<style type="text/css">
+	body {
+		margin: 0;
+		padding: 0;
+		-webkit-user-select: none;
+		color: #fff;
+		text-align: left;
+		overflow: hidden;
+		// background: #aaa;
+	font: bold 8pt "Helvetica";
+}
+	#artBox {
+		position: absolute;
+		top: 15px;
+		width: 67px;
+		padding: 5px;
+		text-align: center;
+	}
+	
+	a {
+		cursor: default;
+	}
+	
+	#art {
+		height: 47px;
+		width: 47px;
+		-webkit-box-shadow: 0px 0px 2px black;
+	}
+
+/* @group All */
+
+#title {
+		color: #fff;
+		text-shadow: #000000 0 1px 01px;
+		position: absolute;
+		top: 22px;
+		left: 60px;
+		width: 290px;
+		white-space:nowrap;
+		overflow:hidden;
+		text-overflow: ellipsis;
+		padding: 5px;
+	font-weight: light;
+	text-transform: capitalize;
+}
+	
+	#title2 {
+		color: #000;
+		position: absolute;
+		top: 22px;
+		left: 60px;
+		width: 290px;
+		white-space:nowrap;
+		overflow:hidden;
+		text-overflow: ellipsis;
+		padding: 5px;
+	font-weight: light;
+	text-shadow: rgba(0,0,0,0.65) 0 1px 02px;
+	text-transform: capitalize;
+}
+	
+
+
+#artist {
+		font-size: 8pt;
+		font-weight: light;
+		text-transform: capitalize;
+		color: #fff;
+		text-shadow: #000000 0 1px 01px;
+		position: absolute;
+		left: 60px;
+		width: 290px;
+		white-space:nowrap;
+		overflow:hidden;
+		text-overflow: ellipsis;
+		padding: 5px;
+	top: 35px;
+}
+	
+	#artist2 {
+		font-size: 8pt;
+		font-weight: light;
+		text-transform: capitalize;
+		color: #000;
+		position: absolute;
+		left: 60px;
+		width: 290px;
+		white-space:nowrap;
+		overflow:hidden;
+		text-overflow: ellipsis;
+		padding: 5px;
+	top: 35px;
+	text-shadow: rgba(0,0,0,0.65) 0 1px 2px;
+}
+
+#rating {
+		font-size: 2pt;
+		font-weight: light;
+		text-transform: uppercase;
+		color: #000;
+		text-shadow: #000000 0 1px 01px;
+		position: absolute;
+		left: 60px;
+		width: 290px;
+		white-space:nowrap;
+		overflow:hidden;
+		text-overflow: ellipsis;
+		padding: 5px;
+	top: 49px;
+}
+
+#rating a {
+		font-size: 7pt;
+		color: #fff;
+		text-decoration: none;
+	left: 60px;
+	font-weight: bold;
+	text-shadow: #000000 0 1px 01px;
+}
+
+/* @end */
+	
+	#highlight {
+		position: absolute;
+		top: 20px;
+		left: 15px;
+	}
+	
+	#controls {
+		top: 50px;
+		left: 15px;
+		width: 555px;
+		background: transparent none repeat;
+		padding: 0 0px;
+		text-align: left;
+		opacity: 0;
+		display: none;
+		// -webkit-transition: opacity 1s linear;
+	position: absolute;
+	text-overflow: ellipsis;
+}
+	
+	#controls a {
+		padding: 0px;
+		orizontal-align: middle;
+	}
+	
+	</style>
+	<script type="text/javascript">
+	oldPlayState = 0;
+	function $(el) { return document.getElementById(el); }
+	function trackUpdate(track)
+	{
+		var title = track.property('title');
+		var artist = track.property('artist');
+		updateRatingUI(iTunes.rating());
+		
+		$('title').innerHTML = title;
+		$('title2').innerHTML = title;
+		$('artist').innerHTML = artist;
+		$('artist2').innerHTML = artist;
+
+	}
+
+	function playerUpdate()
+	{
+		var pState = iTunes.playState();
+		if (pState != oldPlayState)
+		{
+			if (pState == 0 || pState == 2)
+				$('playLink').innerHTML = '<img src="play.png">';
+			else
+				$('playLink').innerHTML = '<img src="pause.png">';
+			
+			oldPlayState = pState;
+		}
+	}
+	
+	function artworkUpdate(artURL)
+	{		
+		if (artURL == "")
+		{
+			$('art').src = "noartwork.png";
+			setTimeout(function(){Reflection.add($('art'));}, 50);
+		}
+		else
+		{
+			$('art').src = artURL;
+			setTimeout(function(){Reflection.add($('art'));}, 50);
+		}
+	}
+	
+	function playPause()
+	{
+		iTunes.playPause();
+		playerUpdate();
+	}
+	
+	function setRating(rating)
+	{
+		updateRatingUI(rating);
+		iTunes.setRating(rating);
+	}
+	
+	function updateRatingUI(rating)
+	{
+		if(rating > 0){
+			$('star1').innerHTML = "★";
+		} else {
+			$('star1').innerHTML = "☆";
+		}
+
+		if(rating > 20){
+			$('star2').innerHTML = "★";
+		} else {
+			$('star2').innerHTML = "☆";
+		}
+
+		if(rating > 40){
+			$('star3').innerHTML = "★";
+		} else {
+			$('star3').innerHTML = "☆";
+		}
+
+		if(rating > 60){
+			$('star4').innerHTML = "★";
+		} else {
+			$('star4').innerHTML = "☆";
+		}
+
+		if(rating > 80){
+			$('star5').innerHTML = "★";
+		} else {
+			$('star5').innerHTML = "☆";
+		}
+	}
+	
+	// Opacity
+	
+	function opacity(id, opacStart, opacEnd, millisec) { 
+  	  //speed for each frame 
+ 	   var speed = Math.round(millisec / 100); 
+ 	   var timer = 0; 
+
+ 	   //determine the direction for the blending, if start and end are the same nothing happens 
+ 	   if(opacStart > opacEnd) { 
+ 	       for(i = opacStart; i >= opacEnd; i--) { 
+  	          setTimeout("changeOpac(" + i + ",'" + id + "')",(timer * speed)); 
+ 	           timer++; 
+ 	       } 
+ 	   } else if(opacStart < opacEnd) { 
+	        for(i = opacStart; i <= opacEnd; i++) 
+  	          { 
+ 	           setTimeout("changeOpac(" + i + ",'" + id + "')",(timer * speed)); 
+ 	           timer++; 
+ 	       } 
+ 	   }
+	} 
+
+	//change the opacity for different browsers 
+	function changeOpac(opacity, id) { 
+ 	   var object = document.getElementById(id).style; 
+	    object.opacity = (opacity / 100);
+		if(object.opacity == 0) {
+			document.getElementById(id).style.display = "none";
+		} else {
+			document.getElementById(id).style.display = "block";
+		}
+	}
+	
+	function shiftOpacity(id, millisec) { 
+    //if an element is invisible, make it visible, else make it ivisible 
+		if(document.getElementById(id).style.opacity == 0) {
+			opacity(id, 0, 100, millisec); 
+		} else { 
+			opacity(id, 100, 0, millisec);
+		} 
+	}
+
+	</script>
+	<script type="text/javascript">
+	mouseDown = false;
+	mouseX = 0;
+	mouseY = 0;
+	
+	mouseStartX = 0;
+	mouseStartY = 0;
+	startFrame = [];
+	document.onmousedown = function(e){
+		mouseDown = true;
+		
+		mouseStartX = e.screenX;
+		mouseStartY = e.screenY;
+		startFrame = Bowtie.frame();
+	}
+	document.onmouseup = function(){
+		mouseDown = false;
+	}
+	document.onmousemove = function(e){
+		mouseX = e.screenX;
+		mouseY = e.screenY;
+		
+		if (mouseDown)
+		{
+			deltaX = mouseX - mouseStartX;
+			deltaY = mouseStartY - mouseY;	// flipped coordinate system
+			
+			Bowtie.setFrame(startFrame[0]+deltaX, startFrame[1]+deltaY, startFrame[2], startFrame[3]);
+		}
+	}
+	</script>
+</head>
+<body id="wetFloor">
+	<div id="artBox">
+		<img class="reflect rheight30 ropacity30" src="noartwork.png" id="art" alt="artwork" />
+	</div>
+	<div id="title2">Loading...</div>
+	<div id="title">Loading...</div>
+	<div id="artist2">Loading...</div>
+	<div id="artist">Loading...</div>
+	<img id="highlight" src="ExtraSmall.png" onClick="shiftOpacity('controls', 300);" />
+	<div id="rating"><!--<a id="removeRating" href="#" onClick="setRating(0);return false;">◦</a>-->
+		<a id="star1" href="#" onClick="setRating(20);return false;">☆</a>
+		<a id="star2" href="#" onClick="setRating(40);return false;">☆</a>
+		<a id="star3" href="#" onClick="setRating(60);return false;">☆</a>
+		<a id="star4" href="#" onClick="setRating(80);return false;">☆</a>
+		<a id="star5" href="#" onClick="setRating(100);return false;">☆</a>
+	</div>
+	<div id="controls">
+		<a href="#" onClick="iTunes.previousTrack();return false;"><img src="back.png"></a>
+		<a href="#" onClick="playPause();return false;" id="playLink"><img src="play.png"></a>
+		<a href="#" onClick="iTunes.nextTrack();return false;"><img src="next.png"></a>
+	</div>
+</body>
+</html>

@@ -1,5 +1,12 @@
 """Full-screen now-playing renderer.
 
+⚠️  DEPRECATED: This pygame renderer is no longer maintained. The web-based theme
+system is the recommended display method. This module is left in its last working
+state for anyone who wants to use it, but will not receive new features or updates.
+
+See themes/ directory for the web-based theme architecture, or run the web server
+in kiosk mode for a fullscreen display.
+
 Runs on the framebuffer through KMS/DRM, so a Raspberry Pi OS Lite install with no
 desktop environment can boot straight into this. It must own the main thread --
 SDL requires it -- so the engine runs on an event loop in a background thread and

@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>BTArtistURL</key>
+	<string>http://dracoamericanusfusco.deviantart.com/</string>
+	<key>BTArtworkFunction</key>
+	<string>artworkUpdate</string>
+	<key>BTArtworkHeight</key>
+	<integer>512</integer>
+	<key>BTArtworkWidth</key>
+	<integer>512</integer>
+	<key>BTMainFile</key>
+	<string>index.html</string>
+	<key>BTPlayStateFunction</key>
+	<string>playStateChanged</string>
+	<key>BTThemeArtist</key>
+	<string>Taylor Cohron</string>
+	<key>BTThemeIdentifier</key>
+	<string>com.tcohron.Massive Vinyl (Dark)</string>
+	<key>BTThemeName</key>
+	<string>Massive Vinyl (Dark)</string>
+	<key>BTThemePreviewImage</key>
+	<string>preview.png</string>
+	<key>BTThemeVersion</key>
+	<string>2.0 (alpha)</string>
+	<key>BTTrackFunction</key>
+	<string>trackUpdate</string>
+	<key>BTWindowHeight</key>
+	<integer>512</integer>
+	<key>BTWindowMode</key>
+	<string>desktop</string>
+	<key>BTWindowWidth</key>
+	<integer>512</integer>
+</dict>
+</plist>

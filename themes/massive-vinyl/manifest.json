@@ -1,0 +1,48 @@
+{
+  "name": "Massive Vinyl",
+  "description": "Vinyl-focused theme with prominent record display and rotating animation",
+  "version": "1.0.0",
+  "author": "Taylor Cohron",
+  "main": "index.html",
+  "preview_image": "preview.png",
+  "viewport": {
+    "width": 1280,
+    "height": 720,
+    "fullscreen_recommended": true,
+    "aspect_ratio_preferrence": "16:9"
+  },
+  "config": {
+    "show_heading": {
+      "type": "boolean",
+      "default": true,
+      "label": "Show 'Now Spinning' heading"
+    },
+    "show_title": {
+      "type": "boolean",
+      "default": true,
+      "label": "Show song title"
+    },
+    "show_artist": {
+      "type": "boolean",
+      "default": true,
+      "label": "Show artist name"
+    },
+    "show_album": {
+      "type": "boolean",
+      "default": true,
+      "label": "Show album name"
+    },
+    "style": {
+      "type": "enum",
+      "values": ["sleeve", "record"],
+      "default": "sleeve",
+      "label": "Display style"
+    },
+    "background_mode": {
+      "type": "enum",
+      "values": ["solid", "artwork"],
+      "default": "solid",
+      "label": "Background mode"
+    }
+  }
+}

@@ -43,7 +43,6 @@ const IDLE_TEXT = {
   identifying: "Working it out",
 };
 
-let theme = null;
 let currentKey = null;
 
 const pct = (value) => `${value * 100}%`;
@@ -116,8 +115,6 @@ function applyGeometry(geometry, display) {
   root.setProperty("--disc-size", pct(discSize));
   root.setProperty("--disc-top", pct(discTop));
   root.setProperty("--crescent", pct(1.0));
-
-  console.log("Geometry applied:", { discCentre, discRadius, discLeft, discSize, discTop });
 }
 
 function applyDisplay(display) {
@@ -133,13 +130,7 @@ function applyDisplay(display) {
 
   ui.stage.dataset.style = display.style || "sleeve";
   const vinylSetting = display.show_vinyl ? "on" : "off";
-  const oldVinyl = ui.body.dataset.vinyl;
   ui.body.dataset.vinyl = vinylSetting;
-  if (oldVinyl !== vinylSetting) {
-    console.log("applyDisplay - vinyl visibility changed:", oldVinyl, "->", vinylSetting, "show_vinyl:", display.show_vinyl);
-  } else {
-    console.log("applyDisplay - vinyl already", vinylSetting);
-  }
   ui.body.dataset.gloss = display.show_gloss ? "on" : "off";
   ui.body.dataset.shadow = display.show_shadow ? "on" : "off";
   ui.body.dataset.background = display.background_mode || "solid";
@@ -198,9 +189,7 @@ function render(state) {
 
   ui.stage.dataset.status = state.status;
 
-  const display = (theme && theme.display) || {};
-  console.log("render() called with state:", { status: state.status, hasTrack: !!track, display });
-
+  const display = window.nowSpinning.config.display || {};
   const heading =
     track && display.heading_text ? display.heading_text : HEADINGS[state.status] || "Ready";
   ui.heading.textContent = heading;
@@ -266,16 +255,6 @@ function start() {
   // Load component assets (case and vinyl)
   ui.jacketImg.src = "/api/asset/sleeve.png";
   ui.discImg.src = "/api/asset/vinyl.png";
-
-  console.log("Start function:", {
-    discImgElement: ui.discImg,
-    discImgSrc: ui.discImg?.src,
-    discImgDisplay: ui.discImg ? window.getComputedStyle(ui.discImg).display : "N/A",
-    discImgWidth: ui.discImg ? window.getComputedStyle(ui.discImg).width : "N/A",
-    discImgHeight: ui.discImg ? window.getComputedStyle(ui.discImg).height : "N/A",
-    discLayerDisplay: ui.discLayer ? window.getComputedStyle(ui.discLayer).display : "N/A",
-    bodyDataVinyl: document.body.dataset.vinyl,
-  });
 
   // Subscribe to state changes via the nowSpinning API
   window.nowSpinning.onStateChange((state) => {

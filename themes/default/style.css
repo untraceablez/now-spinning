@@ -104,15 +104,15 @@ body[data-background="artwork"] .wash::after {
 .stage[data-style="record"] .artwork { display: none; }
 .stage[data-style="sleeve"] .record { display: none; }
 
-/* The cover fills the composition's height and starts at its origin, which is
-   what ART_WINDOW works out to. Clipped where the jacket ends, or a sliver of
-   unglossed artwork shows down the edge. */
+/* The cover fills only the art window, not the entire composition.
+   This allows the vinyl and case to show around the artwork edges. */
 .cover {
   position: absolute;
   left: 0;
   top: 0;
   height: 100%;
-  width: 100%;
+  width: var(--cover-width);
+  clip-path: inset(0 calc(100% - var(--cover-clip)) 0 0);
   object-fit: cover;
   z-index: 2;
 }
@@ -150,7 +150,6 @@ body[data-background="artwork"] .wash::after {
   left: var(--disc-left);
   top: var(--disc-top);
   aspect-ratio: 1;
-  border: 2px solid red;
 }
 
 body[data-gloss="off"] .jacket,
